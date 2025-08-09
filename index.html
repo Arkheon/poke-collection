@@ -81,6 +81,12 @@
   .link{background:none;border:none;color:var(--brand);cursor:pointer;padding:0;font-size:12px}
   .link:hover{text-decoration:underline}
   .multi-actions{display:flex;gap:8px;align-items:center;margin-top:8px;justify-content:flex-end}
+
+  /* Modal viewer (ZOOM) */
+  .modal{position:fixed;inset:0;background:rgba(15,23,42,.8);display:none;align-items:center;justify-content:center;z-index:100}
+  .modal.open{display:flex}
+  .modal img{max-width:90vw;max-height:85vh;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.3)}
+  .modal .close{position:absolute;top:14px;right:18px;background:#fff;border:1px solid var(--ring);border-radius:999px;padding:6px 10px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -153,13 +159,13 @@
         <div class="col"><label>Recherche</label><input id="qg" placeholder="Nom, édition…" type="text"></div>
         <div class="col"><label>Société</label><select id="company"><option value="all">Toutes</option></select></div>
         <div class="col"><label>Note minimale: <span id="minG_label">0</span></label><input id="minG" type="range" min="0" max="10" step="0.5" value="0"></div>
-        <div class="col"><span class="hint">Astuce : ajoute une colonne « Prix » pour afficher un prix.</span></div>
+        <div class="col"><span class="hint">Astuce : ajoute une colonne « Prix » pour afficher un prix.</span></div>
       </div>
     </div>
     <div id="graded-root" class="section"></div>
   </section>
 
-  <p class="hint">Ce site charge automatiquement <code>cartes.csv</code>, <code>scelle.csv</code> et <code>gradees.csv</code> s’ils sont présents à la racine du dépôt. Pour les images, mets une colonne <b>Image</b> (ou <b>Image URL</b> pour les cartes) avec une URL absolue ou un chemin relatif du repo (ex : <code>images/pikachu.jpg</code>).</p>
+  <p class="hint">Ce site charge automatiquement <code>cartes.csv</code>, <code>scelle.csv</code> et <code>gradees.csv</code> s’ils sont présents à la racine du dépôt. Pour les images, mets une colonne <b>Image</b> (ou <b>Image URL</b> pour les cartes) avec une URL absolue ou un chemin relatif du repo (ex : <code>images/pikachu.jpg</code>).</p>
 </main>
 
 <!-- Modal image viewer -->
@@ -194,7 +200,7 @@
 
     // --- Mapping raretés (validé) ---
     const RARITY_MAP = {'1':'commune','2':'peu_commune','3':'rare','4':'rare','5':'rare_silver','6':'rare_silver','7':'promo','32':'double_rare','33':'illustration_rare','34':'ultra_rare_silver','35':'illustration_sr','36':'hyper_rare','39':'chromatique_ur','40':'high_tech'};
-    const RARITY_LABELS = {commune:'Commune',peu_commune:'Peu commune',rare:'Rare',rare_silver:'Rare',double_rare:'Double rare',ultra_rare_silver:'Ultra rare',illustration_rare:'Illustration rare',illustration_sr:'Illustration spéciale rare',hyper_rare:'Hyper rare',chromatique_ur:'Chromatique ultra rare',high_tech:'HIGH‑TECH rare',promo:'Promo'};
+    const RARITY_LABELS = {commune:'Commune',peu_commune:'Peu commune',rare:'Rare',rare_silver:'Rare',double_rare:'Double rare',ultra_rare_silver:'Ultra rare',illustration_rare:'Illustration rare',illustration_sr:'Illustration spéciale rare',hyper_rare:'Hyper rare',chromatique_ur:'Chromatique ultra rare',high_tech:'HIGH-TECH rare',promo:'Promo'};
     const RARITY_ORDER = ['commune','peu_commune','rare','rare_silver','double_rare','ultra_rare_silver','illustration_rare','illustration_sr','hyper_rare','chromatique_ur','high_tech'];
 
     // --- SVG helpers ---
@@ -368,8 +374,17 @@
     const modal=document.getElementById('imgModal');
     const modalImg=document.getElementById('modalImg');
     const modalClose=document.getElementById('modalClose');
-    function openModal(src,alt){ modalImg.src=src; modalImg.alt=alt||''; modal.classList.add('open'); }
-    function closeModal(){ modal.classList.remove('open'); modalImg.src=''; }
+    function openModal(src,alt){ 
+      modalImg.src=src; 
+      modalImg.alt=alt||''; 
+      modal.classList.add('open'); 
+      document.body.style.overflow='hidden';
+    }
+    function closeModal(){ 
+      modal.classList.remove('open'); 
+      modalImg.src=''; 
+      document.body.style.overflow='';
+    }
     modalClose.addEventListener('click', closeModal);
     modal.addEventListener('click', (e)=>{ if(e.target===modal) closeModal(); });
     document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeModal(); });
@@ -388,7 +403,7 @@
 
       // CARTES
       const root=document.getElementById('cards-root');
-      if(!(CARDS&&CARDS.length)){ root.innerHTML=`<div class='empty'>Aucun CSV cartes chargé (auto : <code>${AUTO_SOURCES.cards}</code>)</div>`; }
+      if(!(CARDS&&CARDS.length)){ root.innerHTML=`<div class='empty'>Aucun CSV cartes chargé (auto : <code>${AUTO_SOURCES.cards}</code>)</div>`; }
       else{
         let rows=CARDS.slice();
         if(serie.value!=='all') rows=rows.filter(r=>String(r['Série'])===serie.value);
@@ -424,7 +439,7 @@
 
       // SCELLÉ
       const rootS=document.getElementById('sealed-root');
-      if(!(SEALED&&SEALED.length)){ rootS.innerHTML=`<div class='empty'>Aucun CSV scellé chargé (auto : <code>${AUTO_SOURCES.sealed}</code>)</div>`; }
+      if(!(SEALED&&SEALED.length)){ rootS.innerHTML=`<div class='empty'>Aucun CSV scellé chargé (auto : <code>${AUTO_SOURCES.sealed}</code>)</div>`; }
       else{
         let rows=SEALED.slice();
         if(serieS && serieS.value!=='all') rows=rows.filter(r=>String(r['Série'])===serieS.value);
@@ -456,7 +471,7 @@
 
       // GRADÉES
       const rootG=document.getElementById('graded-root');
-      if(!(GRADED&&GRADED.length)){ rootG.innerHTML=`<div class='empty'>Aucun CSV gradées chargé (auto : <code>${AUTO_SOURCES.graded}</code>)</div>`; }
+      if(!(GRADED&&GRADED.length)){ rootG.innerHTML=`<div class='empty'>Aucun CSV gradées chargé (auto : <code>${AUTO_SOURCES.graded}</code>)</div>`; }
       else{
         let rows=GRADED.slice();
         if(company.value!=='all') rows=rows.filter(r=>String(r['Société'])===company.value);
