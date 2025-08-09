@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Ma collection Pokémon (Lite)</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+  :root{--bg:#f8fafc;--panel:#fff;--ink:#0f172a;--muted:#64748b;--ring:#e2e8f0;--brand:#2563eb;--brand-weak:#e0e7ff}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+  body{color:var(--ink);background:var(--bg)}
+  header{position:sticky;top:0;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--ring);z-index:10}
+  .wrap{max-width:1150px;margin:auto;padding:12px 16px;display:flex;gap:12px;align-items:center}
+  h1{font-size:20px;margin:0;display:flex;align-items:center;gap:10px}
+  .bar{display:flex;gap:8px;align-items:center;margin-left:auto}
+  .btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--ring);background:#fff;border-radius:999px;padding:8px 12px;cursor:pointer}
+  .btn:hover{box-shadow:0 1px 0 rgba(0,0,0,.05)}
+  .hint{font-size:12px;color:var(--muted)}
+
+  /* Tabs pill */
+  .tabs{max-width:1150px;margin:14px auto 0;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:0 16px}
+  .tab{padding:12px;border:1px solid var(--ring);border-radius:12px;background:#fff;text-align:center;cursor:pointer}
+  .tab.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+
+  main{max-width:1150px;margin:0 auto;padding:16px}
+  .card{background:var(--panel);border:1px solid var(--ring);border-radius:16px;overflow:hidden}
+  .card h3{margin:0;font-size:14px;padding:12px;border-bottom:1px solid var(--ring)}
+  .filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;padding:12px}
+  .filters .col{display:flex;flex-direction:column;gap:6px}
+  .filters input[type="text"], .filters select, .filters input[type="range"]{width:100%;padding:10px 12px;border:1px solid var(--ring);border-radius:12px;background:#f8fafc}
+  .filters input[type="checkbox"]{transform:translateY(2px)}
+
+  .legend{display:flex;gap:14px;align-items:center;margin:6px 12px 14px;flex-wrap:wrap}
+  .legend span{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+
+  .section{margin:18px 0}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  @media(min-width:640px){.grid{grid-template-columns:repeat(3,1fr)}}
+  @media(min-width:980px){.grid{grid-template-columns:repeat(5,1fr)}}
+
+  .item{border:1px solid var(--ring);border-radius:14px;overflow:hidden;background:#fff}
+  .thumb{background:#eef2f7;aspect-ratio:3/4;display:flex;align-items:center;justify-content:center}
+  .thumb.img-short{aspect-ratio:16/9}
+  .thumb img{width:100%;height:100%;object-fit:cover}
+  .meta{padding:10px}
+  .meta .t{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .meta .s{color:var(--muted);font-size:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .empty{padding:24px;text-align:center;color:var(--muted);border:1px dashed var(--ring);border-radius:12px;background:#fff}
+
+  /* Pokéball badges */
+  .badges{display:inline-flex;gap:6px;margin-left:6px;vertical-align:middle}
+  .ball{width:14px;height:14px;display:inline-block;border-radius:50%;position:relative;border:1px solid rgba(0,0,0,.15)}
+  .ball::before,.ball::after{content:"";position:absolute;left:0;right:0}
+  .ball::before{top:49%;height:1px;background:rgba(0,0,0,.25)}
+  .ball::after{top:50%;transform:translate(-50%,-50%);left:50%;width:4px;height:4px;border-radius:50%;background:#fff;border:1px solid rgba(0,0,0,.25)}
+  .ball.red{background:#ef4444}
+  .ball.yellow{background:#eab308}
+  .ball.blue{background:#3b82f6}
+
+  /* Rarity icons */
+  .rarity{display:inline-flex;gap:4px;align-items:center}
+  .rarity svg{width:14px;height:14px}
+  .rarity-label{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <img alt="pokeball" src="https://upload.wikimedia.org/wikipedia/commons/5/53/Pok%C3%A9_Ball_icon.svg" style="width:22px;height:22px">
+    <h1>Ma collection Pokémon (Lite)</h1>
+    <div class="bar">
+      <!-- Les boutons d'upload restent visibles comme fallback -->
+      <label class="btn">Cartes CSV <input id="csv-cards" type="file" accept=".csv" hidden></label>
+      <label class="btn">Scellé CSV <input id="csv-sealed" type="file" accept=".csv" hidden></label>
+      <label class="btn">Gradées CSV <input id="csv-graded" type="file" accept=".csv" hidden></label>
+      <button id="load-demo" class="btn">Exemple</button>
+    </div>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" data-tab="cards">Cartes</div>
+  <div class="tab" data-tab="sealed">Scellé</div>
+  <div class="tab" data-tab="graded">Gradées</div>
+</div>
+
+<main>
+  <section class="panel" id="panel-cards">
+    <div class="card">
+      <h3>Filtres</h3>
+      <div class="filters">
+        <div class="col"><label>Recherche</label><input id="q" placeholder="Nom, numéro…" type="text"></div>
+        <div class="col"><label>Série</label><select id="serie"><option value="all">Toutes</option></select></div>
+        <div class="col"><label>Rareté minimale: <span id="minR_label">0</span></label><input id="minR" type="range" min="0" max="50" step="1" value="0"></div>
+        <div class="col"><label><input id="owned" type="checkbox" checked> Montrer uniquement possédées</label></div>
+      </div>
+      <div class="legend">
+        <span><b>Versions :</b></span>
+        <span><i class="ball red"></i> Normale</span>
+        <span><i class="ball yellow"></i> Reverse</span>
+        <span><i class="ball blue"></i> Spéciale</span>
+      </div>
+    </div>
+
+    <div id="cards-root" class="section"></div>
+  </section>
+
+  <section class="panel" id="panel-sealed" style="display:none">
+    <div id="sealed-root" class="section"></div>
+  </section>
+
+  <section class="panel" id="panel-graded" style="display:none">
+    <div class="card">
+      <h3>Filtres gradées</h3>
+      <div class="filters">
+        <div class="col"><label>Recherche</label><input id="qg" placeholder="Nom, édition…" type="text"></div>
+        <div class="col"><label>Société</label><select id="company"><option value="all">Toutes</option></select></div>
+        <div class="col"><label>Note minimale: <span id="minG_label">0</span></label><input id="minG" type="range" min="0" max="10" step="0.5" value="0"></div>
+        <div class="col"><span class="hint">Astuce : ajoute une colonne « Prix » pour afficher un prix.</span></div>
+      </div>
+    </div>
+    <div id="graded-root" class="section"></div>
+  </section>
+
+  <p class="hint">Ce site charge automatiquement <code>cartes.csv</code>, <code>scelle.csv</code> et <code>gradees.csv</code> s’ils sont présents à la racine du dépôt. Pour les images, mets une colonne <b>Image</b> (ou <b>Image URL</b> pour les cartes) avec une URL absolue ou un chemin relatif du repo (ex : <code>images/pikachu.jpg</code>).</p>
+</main>
+
+<script>
+  (document.readyState === 'loading') ? document.addEventListener('DOMContentLoaded', initApp) : initApp();
+
+  function initApp(){
+    // --- Mapping raretés (validé) ---
+    const RARITY_MAP = {'1':'commune','2':'peu_commune','3':'rare','4':'rare','5':'rare_silver','6':'rare_silver','7':'promo','32':'double_rare','33':'illustration_rare','34':'ultra_rare_silver','35':'illustration_sr','36':'hyper_rare','39':'chromatique_ur','40':'high_tech'};
+    const RARITY_LABELS = {commune:'Commune',peu_commune:'Peu commune',rare:'Rare',rare_silver:'Rare (argent)',double_rare:'Double rare',ultra_rare_silver:'Ultra rare (argent)',illustration_rare:'Illustration rare',illustration_sr:'Illustration spéciale rare',hyper_rare:'Hyper rare',chromatique_ur:'Chromatique ultra rare',high_tech:'HIGH‑TECH rare',promo:'Promo'};
+
+    // --- SVG helpers ---
+    const svg=(p)=>`<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
+    const star=(fill,stroke,strokeW=1.5)=>svg(`<path d="M12 2.5l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.9 6.2 20.4l1.1-6.5L2.6 9.3l6.5-.9L12 2.5z" fill="${fill||'none'}" stroke="${stroke||'currentColor'}" stroke-width="${strokeW}"/>`);
+    const circle=(fill,stroke)=>svg(`<circle cx="12" cy="12" r="7" fill="${fill||'none'}" stroke="${stroke||'currentColor'}" stroke-width="1.5"/>`);
+    const diamond=(fill,stroke)=>svg(`<path d="M12 3l7 9-7 9-7-9 7-9z" fill="${fill||'none'}" stroke="${stroke||'currentColor'}" stroke-width="1.5"/>`);
+    const COLORS={black:'#0f172a',silver:'#c0c9d6',gold:'#e3b341',goldStroke:'#d09a00',raspberry:'#e11d48',white:'#ffffff'};
+    function rarityIconsByKey(key){
+      switch(key){
+        case 'commune': return `<span class='rarity'>${circle(COLORS.black, COLORS.black)}</span>`;
+        case 'peu_commune': return `<span class='rarity'>${diamond(COLORS.black, COLORS.black)}</span>`;
+        case 'rare': return `<span class='rarity'>${star(COLORS.black, COLORS.black)}</span>`;
+        case 'rare_silver': return `<span class='rarity'>${star(COLORS.silver, COLORS.silver)}</span>`;
+        case 'double_rare': return `<span class='rarity'>${star(COLORS.black, COLORS.black)}${star(COLORS.black, COLORS.black)}</span>`;
+        case 'ultra_rare_silver': return `<span class='rarity'>${star(COLORS.silver, COLORS.silver)}${star(COLORS.silver, COLORS.silver)}</span>`;
+        case 'illustration_rare': return `<span class='rarity'>${star(COLORS.gold, COLORS.gold)}</span>`;
+        case 'illustration_sr': return `<span class='rarity'>${star(COLORS.gold, COLORS.gold)}${star(COLORS.gold, COLORS.gold)}</span>`;
+        case 'hyper_rare': return `<span class='rarity'>${star(COLORS.gold, COLORS.gold)}${star(COLORS.gold, COLORS.gold)}${star(COLORS.gold, COLORS.gold)}</span>`;
+        case 'chromatique_ur': return `<span class='rarity'>${star(COLORS.white, COLORS.goldStroke, 2)}${star(COLORS.white, COLORS.goldStroke, 2)}</span>`;
+        case 'high_tech': return `<span class='rarity'>${star(COLORS.raspberry, COLORS.raspberry)}</span>`;
+        case 'promo': return `<span class='rarity'><span class='rarity-label'>PROMO</span></span>`;
+        default: return '';
+      }
+    }
+    function rarityFromRow(r){ const code=String(r['Rareté']??'').trim(); const key=RARITY_MAP[code]; return {key,label:key?RARITY_LABELS[key]:null,raw:code}; }
+
+    // State
+    let CARDS=[], SEALED=[], GRADED=[];
+
+    // ---- Chargement auto depuis le repo (GitHub Pages) ----
+    const AUTO_SOURCES={ cards:'cartes.csv', sealed:'scelle.csv', graded:'gradees.csv' };
+
+    function loadCsvFromUrl(url, cb, onError){
+      fetch(url,{cache:'no-store'})
+        .then(r=>{ if(!r.ok) throw new Error(r.status+" "+r.statusText); return r.text(); })
+        .then(text=> Papa.parse(text,{header:true,skipEmptyLines:true,complete:res=>cb(res.data)}))
+        .catch(err=>{ console.warn('CSV auto-load failed for', url, err); onError && onError(err); });
+    }
+
+    // Essaye de charger automatiquement. Si échec, les boutons d'upload restent utilisables.
+    loadCsvFromUrl(AUTO_SOURCES.cards, rows=>{ CARDS=normalizeRows(rows); refreshSeries(); render(); });
+    loadCsvFromUrl(AUTO_SOURCES.sealed, rows=>{ SEALED=normalizeRows(rows); refreshSeries(); render(); });
+    loadCsvFromUrl(AUTO_SOURCES.graded, rows=>{ GRADED=normalizeRows(rows); refreshCompanies(); render(); });
+
+    // --- Normalisation basique des clés/valeurs ---
+    function normalizeRows(rows){
+      return rows.map(r=>Object.fromEntries(Object.entries(r).map(([k,v])=>[String(k).trim(), typeof v==='string'? v.trim(): v])));
+    }
+
+    // Upload fallback (optionnel)
+    document.getElementById('csv-cards').addEventListener('change', e=>{
+      const f=e.target.files?.[0]; if(!f) return; parseFile(f, rows=>{ CARDS=normalizeRows(rows); refreshSeries(); render(); });
+    });
+    document.getElementById('csv-sealed').addEventListener('change', e=>{
+      const f=e.target.files?.[0]; if(!f) return; parseFile(f, rows=>{ SEALED=normalizeRows(rows); refreshSeries(); render(); });
+    });
+    document.getElementById('csv-graded').addEventListener('change', e=>{
+      const f=e.target.files?.[0]; if(!f) return; parseFile(f, rows=>{ GRADED=normalizeRows(rows); refreshCompanies(); render(); });
+    });
+
+    function parseFile(file, cb){ Papa.parse(file,{header:true,skipEmptyLines:true,complete:res=>cb(res.data)}); }
+
+    // Demo
+    document.getElementById('load-demo').addEventListener('click', ()=>{
+      CARDS=[
+        {'Série':'151','Numéro':'1/165','Nom':'Bulbizarre','Rareté':'1','Nb Normal':'1','Nb Reverse':'1','Nb Spéciale':'0','Image URL':'https://images.pokemontcg.io/sv3/fr/1_hires.png'},
+        {'Série':'Écarlate et Violet','Numéro':'14/198','Nom':'Rare argent','Rareté':'5','Nb Normal':'1'},
+        {'Série':'Couronne Stellaire','Numéro':'151/142','Nom':'Zeraora (Hyper rare)','Rareté':'36','Nb Spéciale':'1','Image URL':'https://pokecardex.b-cdn.net/assets/images/sets/SCR/HD/151.jpg?class=hd'},
+        {'Série':'Écarlate et Violet','Numéro':'205/198','Nom':'Chromatique UR','Rareté':'39','Nb Normal':'1'}
+      ];
+      SEALED=[{'Série':'151','Type':'ETB','Détail':'Exemple','Commentaires':'—','Image':'https://via.placeholder.com/400x250?text=ETB+151'}];
+      GRADED=[{'Nom':'Pikachu','Edition':'SWSH','Société':'PSA','Note':'10','Détail':'Test','Image':'https://via.placeholder.com/400x250?text=PSA+10'}];
+      refreshSeries(); refreshCompanies(); render();
+    });
+
+    // Filtres
+    const q=document.getElementById('q');
+    const serie=document.getElementById('serie');
+    const minR=document.getElementById('minR');
+    const minR_label=document.getElementById('minR_label');
+    const owned=document.getElementById('owned');
+    q.oninput=serie.onchange=owned.onchange=()=>render();
+    minR.oninput=()=>{minR_label.textContent=minR.value; render();}
+
+    const qg=document.getElementById('qg');
+    const company=document.getElementById('company');
+    const minG=document.getElementById('minG');
+    const minG_label=document.getElementById('minG_label');
+    if(qg) qg.oninput=()=>render();
+    if(company) company.onchange=()=>render();
+    if(minG) minG.oninput=()=>{minG_label.textContent=minG.value; render();}
+
+    function refreshSeries(){
+      const s=new Set();
+      CARDS.forEach(r=>r['Série'] && s.add(String(r['Série'])));
+      SEALED.forEach(r=>r['Série'] && s.add(String(r['Série'])));
+      const options=['all',...Array.from(s).sort((a,b)=>a.localeCompare(b,'fr'))];
+      serie.innerHTML=options.map(v=>`<option value="${v}">${v==='all'?'Toutes':v}</option>`).join('');
+    }
+    function refreshCompanies(){
+      const s=new Set(GRADED.map(r=>String(r['Société']||'')));
+      const options=['all',...Array.from(s).filter(Boolean).sort((a,b)=>a.localeCompare(b,'fr'))];
+      company.innerHTML=options.map(v=>`<option value="${v}">${v==='all'?'Toutes':v}</option>`).join('');
+    }
+
+    function ownedQty(r){
+      const keys=["Nb Normal","Nb Ed1","Nb Reverse","Nb Spéciale","Quantité","Qty"]; return keys.map(k=>{ const n=Number(r[k]); return Number.isNaN(n)?0:Math.max(0,n); }).reduce((a,b)=>a+b,0);
+    }
+    function sortCardNumbers(a,b){
+      const A=String(a['Numéro']||''); const B=String(b['Numéro']||'');
+      const [mA,sA]=A.split('/').map(x=>parseInt(x,10)); const [mB,sB]=B.split('/').map(x=>parseInt(x,10));
+      if(!Number.isNaN(mA)&&!Number.isNaN(mB)){ if(mA!==mB) return mA-mB; if(!Number.isNaN(sA)&&!Number.isNaN(sB)) return sA-sB; }
+      return A.localeCompare(B,'fr',{numeric:true});
+    }
+
+    function render(){
+      // CARTES
+      const root=document.getElementById('cards-root');
+      if(!(CARDS&&CARDS.length)){ root.innerHTML=`<div class='empty'>Aucun CSV cartes chargé (auto : <code>${AUTO_SOURCES.cards}</code>)</div>`; }
+      else{
+        let rows=CARDS.slice();
+        if(serie.value!=='all') rows=rows.filter(r=>String(r['Série'])===serie.value);
+        if(q.value.trim()){ const qq=q.value.toLowerCase(); rows=rows.filter(r=>['Nom','Numéro','Série'].some(k=>String(r[k]||'').toLowerCase().includes(qq))); }
+        rows=rows.filter(r=>{ const rr=Number(r['Rareté']); return Number.isNaN(rr)?true:rr>=Number(minR.value); });
+        if(owned.checked) rows=rows.filter(r=> ownedQty(r)>0 );
+
+        const m=new Map(); rows.forEach(r=>{ const s=String(r['Série']||'Sans série'); if(!m.has(s)) m.set(s,[]); m.get(s).push(r); });
+        const groups=Array.from(m.entries()).sort((a,b)=>a[0].localeCompare(b[0],'fr'));
+        let html='';
+        const rarityHtml=(r)=>{ const {key,label,raw}=rarityFromRow(r); return key? `${rarityIconsByKey(key)} <span class='rarity-label'>${label}</span>`: `<span class='rarity-label'>Rareté: ${raw||'—'}</span>`; };
+        const badges=(r)=>{ const n=Number(r['Nb Normal'])>0, rv=Number(r['Nb Reverse'])>0, sp=Number(r['Nb Spéciale'])>0; return `<span class='badges'>${n?`<span class='ball red' title='Normale'></span>`:''}${rv?`<span class='ball yellow' title='Reverse'></span>`:''}${sp?`<span class='ball blue' title='Spéciale'></span>`:''}</span>`; };
+
+        groups.forEach(([s,arr])=>{
+          arr.sort(sortCardNumbers);
+          html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${s} <span class='hint'>(${arr.length} cartes)</span></h3><div class='grid'>`;
+          arr.forEach(r=>{
+            // Supporte "Image URL" mais aussi une colonne générique "Image"
+            const url = r['Image URL'] || r['Image'] || '';
+            const img = url? `<img loading='lazy' src='${url}' alt='${(r['Nom']||'')}'/>` : '';
+            const qte=ownedQty(r);
+            html+=`<div class='item'>
+              <div class='thumb'>${img || '<span class="hint">(pas d\'image)</span>'}</div>
+              <div class='meta'>
+                <div class='t'>${(r['Numéro']||'')} • ${(r['Nom']||'Sans nom')}</div>
+                <div class='s'>${rarityHtml(r)}<span>Qté: ${qte}</span>${badges(r)}</div>
+                ${r['Prix']? `<div class='s'>Prix: ${r['Prix']}</div>`:''}
+              </div>
+            </div>`;
+          });
+          html+=`</div></div>`;
+        });
+        root.innerHTML=html||`<div class='empty'>Aucun résultat avec ces filtres.</div>`;
+      }
+
+      // SCELLÉ
+      const rootS=document.getElementById('sealed-root');
+      if(!(SEALED&&SEALED.length)){ rootS.innerHTML=`<div class='empty'>Aucun CSV scellé chargé (auto : <code>${AUTO_SOURCES.sealed}</code>)</div>`; }
+      else{
+        let rows=SEALED.slice();
+        if(serie.value!=='all') rows=rows.filter(r=>String(r['Série'])===serie.value);
+        const m=new Map(); rows.forEach(r=>{ const s=String(r['Série']||'Sans série'); if(!m.has(s)) m.set(s,[]); m.get(s).push(r); });
+        const groups=Array.from(m.entries()).sort((a,b)=>a[0].localeCompare(b[0],'fr'));
+        let html='';
+        groups.forEach(([s,arr])=>{
+          html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${s} <span class='hint'>(${arr.length})</span></h3><div class='grid' style='grid-template-columns:repeat(3,1fr)'>`;
+          arr.forEach(r=>{
+            const img = r['Image']? `<img loading='lazy' src='${r['Image']}' alt='${(r['Type']||'Item')}'/>` : '';
+            html+=`<div class='item'>
+              <div class='thumb img-short'>${img || '<span class="hint">(pas d\'image)</span>'}</div>
+              <div class='meta'>
+                <div class='t'>${(r['Type']||'Item')}</div>
+                ${r['Détail']? `<div class='s'>Détail: ${r['Détail']}</div>`:''}
+                ${r['Commentaires']? `<div class='s'>${r['Commentaires']}</div>`:''}
+              </div>
+            </div>`;
+          });
+          html+=`</div></div>`;
+        });
+        rootS.innerHTML=html;
+      }
+
+      // GRADÉES
+      const rootG=document.getElementById('graded-root');
+      if(!(GRADED&&GRADED.length)){ rootG.innerHTML=`<div class='empty'>Aucun CSV gradées chargé (auto : <code>${AUTO_SOURCES.graded}</code>)</div>`; }
+      else{
+        let rows=GRADED.slice();
+        if(company.value!=='all') rows=rows.filter(r=>String(r['Société'])===company.value);
+        if(qg && qg.value.trim()){ const qq=qg.value.toLowerCase(); rows=rows.filter(r=>['Nom','Edition','Détail'].some(k=>String(r[k]||'').toLowerCase().includes(qq))); }
+        const min=Number(minG.value); rows=rows.filter(r=>{ const n=Number(r['Note']); return Number.isNaN(n)?true:n>=min; });
+        rows.sort((a,b)=> String(a['Nom']||'').localeCompare(String(b['Nom']||''),'fr'));
+        let html=`<div class='grid' style='grid-template-columns:repeat(3,1fr)'>`;
+        rows.forEach(r=>{
+          const img = r['Image']? `<img loading='lazy' src='${r['Image']}' alt='${(r['Nom']||'Carte')}'/>` : '';
+          html+=`<div class='item'>
+            <div class='thumb img-short'>${img || '<span class="hint">(pas d\'image)</span>'}</div>
+            <div class='meta'>
+              <div class='t'>${r['Nom']||'Carte'}</div>
+              <div class='s'>Note: ${(r['Note']??'—')} (${r['Société']||'?'})</div>
+              ${r['Edition']? `<div class='s'>Édition: ${r['Edition']}</div>`:''}
+              ${r['Détail']? `<div class='s'>${r['Détail']}</div>`:''}
+            </div>
+          </div>`;
+        });
+        html+=`</div>`;
+        rootG.innerHTML=html||`<div class='empty'>Aucun résultat.</div>`;
+      }
+    }
+  }
+</script>
+</body>
+</html>
