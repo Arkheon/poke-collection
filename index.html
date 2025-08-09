@@ -186,6 +186,19 @@
       const demoBtn = document.getElementById('load-demo'); if(demoBtn) demoBtn.style.display='none';
     }
 
+    // Helpers de normalisation (accents/espaces) + slug
+    const normalize = (s) => String(s ?? '')
+      .normalize('NFC')          // normalise Unicode
+      .trim()                    // supprime espaces début/fin
+      .replace(/\s+/g,' ');      // condense espaces internes
+    const slugify = (s) => normalize(s)
+      .normalize('NFD')                // décompose accents
+      .replace(/[\u0300-\u036f]/g,'')  // retire diacritiques
+      .toLowerCase();
+
+    // Map slug -> libellé canonique (préférer libellé tel que présent dans le CSV cartes)
+    let SERIE_CANON = new Map();
+
     // ——— Tabs ———
     const tabs = document.querySelectorAll('.tab');
     tabs.forEach(t => t.addEventListener('click', () => {
@@ -256,11 +269,8 @@
       else rarityBtn.textContent=`${selectedRarities.size} rareté(s) sélectionnée(s)`;
     }
     if(rarityBtn){
-      // Ouvrir/fermer via le bouton
       rarityBtn.addEventListener('click', (e) => { e.stopPropagation(); rarityDD.hidden = !rarityDD.hidden; });
-      // Empêcher la fermeture au clic dans le contenu du menu
       rarityDD.addEventListener('click', (e) => { e.stopPropagation(); });
-      // Fermer uniquement si clic à l'extérieur
       document.addEventListener('click', (e) => { if (!rarityDD.hidden && !e.target.closest('.multi')) { rarityDD.hidden = true; } });
     }
 
@@ -337,23 +347,59 @@
     // Raretés UI init
     buildRarityDropdown();
 
-    function refreshSeries(){
-      updateRarityBtn();
-      const s=new Set();
-      CARDS.forEach(r=>r['Série'] && s.add(String(r['Série'])));
-      SEALED.forEach(r=>r['Série'] && s.add(String(r['Série'])));
-      const options=['all',...Array.from(s).sort((a,b)=>a.localeCompare(b,'fr'))];
-      serie.innerHTML=options.map(v=>`<option value="${v}">${v==='all'?'Toutes':v}</option>`).join('');
+    // ——————————— Normalisation & menus séries ———————————
+    function rebuildSerieCanon() {
+      const map = new Map();
+      // On préfère le libellé tel qu'il apparaît dans le CSV des cartes
+      CARDS.forEach(r=>{
+        const raw = normalize(r['Série']);
+        if(!raw) return;
+        const sl = slugify(raw);
+        if(!map.has(sl)) map.set(sl, raw);
+      });
+      // Puis on ajoute les scellés si nouveaux slugs
+      SEALED.forEach(r=>{
+        const raw = normalize(r['Série']);
+        if(!raw) return;
+        const sl = slugify(raw);
+        if(!map.has(sl)) map.set(sl, raw);
+      });
+      SERIE_CANON = map;
     }
+
+    function refreshSeries(){
+      rebuildSerieCanon();
+      // options de la liste séries (valeur = slug, libellé = canonique)
+      const options = ['all', ...Array.from(SERIE_CANON.keys()).sort((a,b)=>{
+        return SERIE_CANON.get(a).localeCompare(SERIE_CANON.get(b),'fr');
+      })];
+
+      serie.innerHTML = options.map(sl=>{
+        return `<option value="${sl}">${sl==='all' ? 'Toutes' : SERIE_CANON.get(sl)}</option>`;
+      }).join('');
+
+      // Séries pour l’onglet scellé
+      const sSet = new Set(SEALED.map(r=>slugify(r['Série']||'')));
+      const sList = ['all', ...Array.from(sSet).filter(Boolean).sort((a,b)=>{
+        return SERIE_CANON.get(a)?.localeCompare(SERIE_CANON.get(b),'fr');
+      })];
+      if(serieS){
+        serieS.innerHTML = sList.map(sl=>{
+          const label = sl==='all' ? 'Toutes' : (SERIE_CANON.get(sl) || '');
+          return `<option value="${sl}">${label}</option>`;
+        }).join('');
+      }
+    }
+
     function refreshSealedFilters(){
-      if(!SEALED || !SEALED.length) return;
-      const s=new Set(), t=new Set();
-      SEALED.forEach(r=>{ if(r['Série']) s.add(String(r['Série'])); if(r['Type']) t.add(String(r['Type'])); });
-      const sOpt=['all',...Array.from(s).sort((a,b)=>a.localeCompare(b,'fr'))];
+      if(!(SEALED && SEALED.length)) return;
+      // Types scellés
+      const t=new Set();
+      SEALED.forEach(r=>{ const raw = normalize(r['Type']); if(raw) t.add(raw); });
       const tOpt=['all',...Array.from(t).sort((a,b)=>a.localeCompare(b,'fr'))];
-      if(serieS) serieS.innerHTML=sOpt.map(v=>`<option value="${v}">${v==='all'?'Toutes':v}</option>`).join('');
       if(typeS) typeS.innerHTML=tOpt.map(v=>`<option value="${v}">${v==='all'?'Tous':v}</option>`).join('');
     }
+
     function refreshCompanies(){
       const s=new Set(GRADED.map(r=>String(r['Société']||'')));
       const options=['all',...Array.from(s).filter(Boolean).sort((a,b)=>a.localeCompare(b,'fr'))];
@@ -399,26 +445,42 @@
     hookImageClicks(document.body);
 
     function render(){
-      // IMPORTANT : ne pas refermer le menu ici — on le ferme seulement via clic extérieur
-
       // CARTES
       const root=document.getElementById('cards-root');
       if(!(CARDS&&CARDS.length)){ root.innerHTML=`<div class='empty'>Aucun CSV cartes chargé (auto : <code>${AUTO_SOURCES.cards}</code>)</div>`; }
       else{
         let rows=CARDS.slice();
-        if(serie.value!=='all') rows=rows.filter(r=>String(r['Série'])===serie.value);
-        if(q.value.trim()){ const qq=q.value.toLowerCase(); rows=rows.filter(r=>['Nom','Numéro','Série'].some(k=>String(r[k]||'').toLowerCase().includes(qq))); }
+        const selectedSlug = serie.value;
+        if(selectedSlug !== 'all'){
+          rows = rows.filter(r => slugify(r['Série']) === selectedSlug);
+        }
+        if(q.value.trim()){
+          const qq=q.value.toLowerCase();
+          rows=rows.filter(r=>['Nom','Numéro','Série'].some(k=>String(r[k]||'').toLowerCase().includes(qq)));
+        }
         rows=rows.filter(r=>{ const {key}=rarityFromRow(r); return !key || selectedRarities.has(key); });
 
-        const m=new Map(); rows.forEach(r=>{ const s=String(r['Série']||'Sans série'); if(!m.has(s)) m.set(s,[]); m.get(s).push(r); });
-        const groups=Array.from(m.entries()).sort((a,b)=>a[0].localeCompare(b[0],'fr'));
+        // Groupes par slug de série, titre = libellé canonique
+        const groupsMap = new Map();
+        rows.forEach(r=>{
+          const sl = slugify(r['Série']);
+          if(!groupsMap.has(sl)) groupsMap.set(sl, []);
+          groupsMap.get(sl).push(r);
+        });
+        const groups = Array.from(groupsMap.entries()).sort((a,b)=>{
+          const la = SERIE_CANON.get(a[0]) || '';
+          const lb = SERIE_CANON.get(b[0]) || '';
+          return la.localeCompare(lb,'fr');
+        });
+
         let html='';
         const rarityHtml=(r)=>{ const {key,label,raw}=rarityFromRow(r); return key? `${rarityIconsByKey(key)} <span class='rarity-label'>${label}</span>`: `<span class='rarity-label'>Rareté: ${raw||'—'}</span>`; };
         const badges=(r)=>{ const n=Number(r['Nb Normal'])>0, rv=Number(r['Nb Reverse'])>0, sp=Number(r['Nb Spéciale'])>0; return `<span class='badges'>${n?`<span class='ball red' title='Normale'></span>`:''}${rv?`<span class='ball yellow' title='Reverse'></span>`:''}${sp?`<span class='ball blue' title='Spéciale'></span>`:''}</span>`; };
 
-        groups.forEach(([s,arr])=>{
+        groups.forEach(([slug,arr])=>{
+          const title = SERIE_CANON.get(slug) || 'Sans série';
           arr.sort(sortCardNumbers);
-          html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${s} <span class='hint'>(${arr.length} cartes)</span></h3><div class='grid'>`;
+          html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${title} <span class='hint'>(${arr.length} cartes)</span></h3><div class='grid'>`;
           arr.forEach(r=>{
             const url = r['Image URL'] || r['Image'] || '';
             const img = url? `<img loading='lazy' src='${url}' alt='${(r['Nom']||'')}'/>` : '';
@@ -442,17 +504,29 @@
       if(!(SEALED&&SEALED.length)){ rootS.innerHTML=`<div class='empty'>Aucun CSV scellé chargé (auto : <code>${AUTO_SOURCES.sealed}</code>)</div>`; }
       else{
         let rows=SEALED.slice();
-        if(serieS && serieS.value!=='all') rows=rows.filter(r=>String(r['Série'])===serieS.value);
-        if(typeS && typeS.value!=='all') rows=rows.filter(r=>String(r['Type']||'')===typeS.value);
+        const selectedSlugS = serieS ? serieS.value : 'all';
+        if(serieS && selectedSlugS!=='all') rows=rows.filter(r=>slugify(r['Série'])===selectedSlugS);
+        if(typeS && typeS.value!=='all') rows=rows.filter(r=>normalize(r['Type']||'')===typeS.value);
         if(qs && qs.value.trim()){
           const qq=qs.value.toLowerCase();
           rows=rows.filter(r=>['Type','Détail','Commentaires','Série'].some(k=>String(r[k]||'').toLowerCase().includes(qq)));
         }
-        const m=new Map(); rows.forEach(r=>{ const s=String(r['Série']||'Sans série'); if(!m.has(s)) m.set(s,[]); m.get(s).push(r); });
-        const groups=Array.from(m.entries()).sort((a,b)=>a[0].localeCompare(b[0],'fr'));
+        const groupsMap = new Map();
+        rows.forEach(r=>{
+          const sl = slugify(r['Série']);
+          if(!groupsMap.has(sl)) groupsMap.set(sl, []);
+          groupsMap.get(sl).push(r);
+        });
+        const groups = Array.from(groupsMap.entries()).sort((a,b)=>{
+          const la = SERIE_CANON.get(a[0]) || '';
+          const lb = SERIE_CANON.get(b[0]) || '';
+          return la.localeCompare(lb,'fr');
+        });
+
         let html='';
-        groups.forEach(([s,arr])=>{
-          html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${s} <span class='hint'>(${arr.length})</span></h3><div class='grid' style='grid-template-columns:repeat(3,1fr)'>`;
+        groups.forEach(([slug,arr])=>{
+          const title = SERIE_CANON.get(slug) || 'Sans série';
+          html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${title} <span class='hint'>(${arr.length})</span></h3><div class='grid' style='grid-template-columns:repeat(3,1fr)'>`;
           arr.forEach(r=>{
             const img = r['Image']? `<img loading='lazy' src='${r['Image']}' alt='${(r['Type']||'Item')}'/>` : '';
             html+=`<div class='item'>
