@@ -257,8 +257,21 @@
       else rarityBtn.textContent=`${selectedRarities.size} rareté(s) sélectionnée(s)`;
     }
     if(rarityBtn){
-      rarityBtn.addEventListener('click',()=>{ rarityDD.hidden=!rarityDD.hidden; });
-      document.addEventListener('click',(e)=>{ if(!rarityDD.hidden && !e.target.closest('.multi')) rarityDD.hidden=true; });
+      rarityBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      rarityDD.hidden = !rarityDD.hidden;
+    });
+
+      rarityDD.addEventListener('click', (e) => {
+    // Empêche la fermeture lors des clics sur le contenu du menu
+      e.stopPropagation();
+    });
+  
+      document.addEventListener('click', (e) => {
+        if (!rarityDD.hidden && !e.target.closest('.multi')) {
+          rarityDD.hidden = true;
+  }
+});
     }
 
     // State
