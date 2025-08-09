@@ -109,6 +109,15 @@
   </section>
 
   <section class="panel" id="panel-sealed" style="display:none">
+    <div class="card">
+      <h3>Filtres scellé</h3>
+      <div class="filters">
+        <div class="col"><label>Recherche</label><input id="qs" placeholder="Type, détail, commentaire…" type="text"></div>
+        <div class="col"><label>Série</label><select id="serieS"><option value="all">Toutes</option></select></div>
+        <div class="col"><label>Type</label><select id="typeS"><option value="all">Tous</option></select></div>
+        <div class="col"></div>
+      </div>
+    </div>
     <div id="sealed-root" class="section"></div>
   </section>
 
@@ -135,7 +144,10 @@
     // ——— Configuration d'affichage ———
     const params = new URLSearchParams(location.search);
     const SHOW_UPLOADS = params.has('upload'); // ajoute ?upload pour réafficher les boutons si besoin
-    if(!SHOW_UPLOADS){ const up = document.querySelector('.uploads'); if(up) up.style.display='none'; }
+    if(!SHOW_UPLOADS){
+      const up = document.querySelector('.uploads'); if(up) up.style.display='none';
+      const demoBtn = document.getElementById('load-demo'); if(demoBtn) demoBtn.style.display='none';
+    }
 
     // ——— Tabs ———
     const tabs = document.querySelectorAll('.tab');
@@ -193,7 +205,7 @@
 
     // Auto-load. Si échec, les uploads restent disponibles via ?upload
     loadCsvFromUrl(AUTO_SOURCES.cards, rows=>{ CARDS=normalizeRows(rows); refreshSeries(); render(); });
-    loadCsvFromUrl(AUTO_SOURCES.sealed, rows=>{ SEALED=normalizeRows(rows); refreshSeries(); render(); });
+    loadCsvFromUrl(AUTO_SOURCES.sealed, rows=>{ SEALED=normalizeRows(rows); refreshSeries(); refreshSealedFilters(); render(); });
     loadCsvFromUrl(AUTO_SOURCES.graded, rows=>{ GRADED=normalizeRows(rows); refreshCompanies(); render(); });
 
     function normalizeRows(rows){
@@ -206,7 +218,7 @@
         const f=e.target.files?.[0]; if(!f) return; parseFile(f, rows=>{ CARDS=normalizeRows(rows); refreshSeries(); render(); });
       });
       document.getElementById('csv-sealed').addEventListener('change', e=>{
-        const f=e.target.files?.[0]; if(!f) return; parseFile(f, rows=>{ SEALED=normalizeRows(rows); refreshSeries(); render(); });
+        const f=e.target.files?.[0]; if(!f) return; parseFile(f, rows=>{ SEALED=normalizeRows(rows); refreshSeries(); refreshSealedFilters(); render(); });
       });
       document.getElementById('csv-graded').addEventListener('change', e=>{
         const f=e.target.files?.[0]; if(!f) return; parseFile(f, rows=>{ GRADED=normalizeRows(rows); refreshCompanies(); render(); });
@@ -215,20 +227,22 @@
 
     function parseFile(file, cb){ Papa.parse(file,{header:true,skipEmptyLines:true,complete:res=>cb(res.data)}); }
 
-    // Demo
-    document.getElementById('load-demo').addEventListener('click', ()=>{
-      CARDS=[
-        {'Série':'151','Numéro':'1/165','Nom':'Bulbizarre','Rareté':'1','Nb Normal':'1','Nb Reverse':'1','Nb Spéciale':'0','Image URL':'https://images.pokemontcg.io/sv3/fr/1_hires.png'},
-        {'Série':'Écarlate et Violet','Numéro':'14/198','Nom':'Rare argent','Rareté':'5','Nb Normal':'1'},
-        {'Série':'Couronne Stellaire','Numéro':'151/142','Nom':'Zeraora (Hyper rare)','Rareté':'36','Nb Spéciale':'1','Image URL':'https://pokecardex.b-cdn.net/assets/images/sets/SCR/HD/151.jpg?class=hd'},
-        {'Série':'Écarlate et Violet','Numéro':'205/198','Nom':'Chromatique UR','Rareté':'39','Nb Normal':'1'}
-      ];
-      SEALED=[{'Série':'151','Type':'ETB','Détail':'Exemple','Commentaires':'—','Image':'https://via.placeholder.com/400x250?text=ETB+151'}];
-      GRADED=[{'Nom':'Pikachu','Edition':'SWSH','Société':'PSA','Note':'10','Détail':'Test','Image':'https://via.placeholder.com/400x250?text=PSA+10'}];
-      refreshSeries(); refreshCompanies(); render();
-    });
+    // Demo (caché sauf ?upload)
+    if(SHOW_UPLOADS){
+      document.getElementById('load-demo').addEventListener('click', ()=>{
+        CARDS=[
+          {'Série':'151','Numéro':'1/165','Nom':'Bulbizarre','Rareté':'1','Nb Normal':'1','Nb Reverse':'1','Nb Spéciale':'0','Image URL':'https://images.pokemontcg.io/sv3/fr/1_hires.png'},
+          {'Série':'Écarlate et Violet','Numéro':'14/198','Nom':'Rare argent','Rareté':'5','Nb Normal':'1'},
+          {'Série':'Couronne Stellaire','Numéro':'151/142','Nom':'Zeraora (Hyper rare)','Rareté':'36','Nb Spéciale':'1','Image URL':'https://pokecardex.b-cdn.net/assets/images/sets/SCR/HD/151.jpg?class=hd'},
+          {'Série':'Écarlate et Violet','Numéro':'205/198','Nom':'Chromatique UR','Rareté':'39','Nb Normal':'1'}
+        ];
+        SEALED=[{'Série':'151','Type':'ETB','Détail':'Exemple','Commentaires':'—','Image':'https://via.placeholder.com/400x250?text=ETB+151'}];
+        GRADED=[{'Nom':'Pikachu','Edition':'SWSH','Société':'PSA','Note':'10','Détail':'Test','Image':'https://via.placeholder.com/400x250?text=PSA+10'}];
+        refreshSeries(); refreshSealedFilters(); refreshCompanies(); render();
+      });
+    }
 
-    // Filtres
+    // Filtres cartes
     const q=document.getElementById('q');
     const serie=document.getElementById('serie');
     const minR=document.getElementById('minR');
@@ -237,6 +251,15 @@
     q.oninput=serie.onchange=owned.onchange=()=>render();
     minR.oninput=()=>{minR_label.textContent=minR.value; render();}
 
+    // Filtres scellé
+    const qs=document.getElementById('qs');
+    const serieS=document.getElementById('serieS');
+    const typeS=document.getElementById('typeS');
+    if(qs) qs.oninput=()=>render();
+    if(serieS) serieS.onchange=()=>render();
+    if(typeS) typeS.onchange=()=>render();
+
+    // Filtres gradées
     const qg=document.getElementById('qg');
     const company=document.getElementById('company');
     const minG=document.getElementById('minG');
@@ -251,6 +274,15 @@
       SEALED.forEach(r=>r['Série'] && s.add(String(r['Série'])));
       const options=['all',...Array.from(s).sort((a,b)=>a.localeCompare(b,'fr'))];
       serie.innerHTML=options.map(v=>`<option value="${v}">${v==='all'?'Toutes':v}</option>`).join('');
+    }
+    function refreshSealedFilters(){
+      if(!SEALED || !SEALED.length) return;
+      const s=new Set(), t=new Set();
+      SEALED.forEach(r=>{ if(r['Série']) s.add(String(r['Série'])); if(r['Type']) t.add(String(r['Type'])); });
+      const sOpt=['all',...Array.from(s).sort((a,b)=>a.localeCompare(b,'fr'))];
+      const tOpt=['all',...Array.from(t).sort((a,b)=>a.localeCompare(b,'fr'))];
+      if(serieS) serieS.innerHTML=sOpt.map(v=>`<option value="${v}">${v==='all'?'Toutes':v}</option>`).join('');
+      if(typeS) typeS.innerHTML=tOpt.map(v=>`<option value="${v}">${v==='all'?'Tous':v}</option>`).join('');
     }
     function refreshCompanies(){
       const s=new Set(GRADED.map(r=>String(r['Société']||'')));
@@ -289,7 +321,6 @@
           arr.sort(sortCardNumbers);
           html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${s} <span class='hint'>(${arr.length} cartes)</span></h3><div class='grid'>`;
           arr.forEach(r=>{
-            // Supporte "Image URL" mais aussi une colonne générique "Image"
             const url = r['Image URL'] || r['Image'] || '';
             const img = url? `<img loading='lazy' src='${url}' alt='${(r['Nom']||'')}'/>` : '';
             const qte=ownedQty(r);
@@ -312,7 +343,12 @@
       if(!(SEALED&&SEALED.length)){ rootS.innerHTML=`<div class='empty'>Aucun CSV scellé chargé (auto : <code>${AUTO_SOURCES.sealed}</code>)</div>`; }
       else{
         let rows=SEALED.slice();
-        if(serie.value!=='all') rows=rows.filter(r=>String(r['Série'])===serie.value);
+        if(serieS && serieS.value!=='all') rows=rows.filter(r=>String(r['Série'])===serieS.value);
+        if(typeS && typeS.value!=='all') rows=rows.filter(r=>String(r['Type']||'')===typeS.value);
+        if(qs && qs.value.trim()){
+          const qq=qs.value.toLowerCase();
+          rows=rows.filter(r=>['Type','Détail','Commentaires','Série'].some(k=>String(r[k]||'').toLowerCase().includes(qq)));
+        }
         const m=new Map(); rows.forEach(r=>{ const s=String(r['Série']||'Sans série'); if(!m.has(s)) m.set(s,[]); m.get(s).push(r); });
         const groups=Array.from(m.entries()).sort((a,b)=>a[0].localeCompare(b[0],'fr'));
         let html='';
@@ -340,7 +376,8 @@
       else{
         let rows=GRADED.slice();
         if(company.value!=='all') rows=rows.filter(r=>String(r['Société'])===company.value);
-        if(qg && qg.value.trim()){ const qq=qg.value.toLowerCase(); rows=rows.filter(r=>['Nom','Edition','Détail'].some(k=>String(r[k]||'').toLowerCase().includes(qq))); }
+        if(qg && qg.value.trim()){ const qq=qg.value.toLowerCase(); rows=rows.filter(r=>['Nom','Edition','Détail'].some(k=>String(r[k]||'').toLowerCase().includes(qq)));
+        }
         const min=Number(minG.value); rows=rows.filter(r=>{ const n=Number(r['Note']); return Number.isNaN(n)?true:n>=min; });
         rows.sort((a,b)=> String(a['Nom']||'').localeCompare(String(b['Nom']||''),'fr'));
         let html=`<div class='grid' style='grid-template-columns:repeat(3,1fr)'>`;
