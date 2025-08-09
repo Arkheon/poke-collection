@@ -31,11 +31,9 @@
   .filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;padding:12px}
   .filters .col{display:flex;flex-direction:column;gap:6px}
   .filters input[type="text"], .filters select{width:100%;padding:10px 12px;border:1px solid var(--ring);border-radius:12px;background:#f8fafc}
-  .filters input[type="checkbox"]{transform:translateY(2px)}
   .col.span-2{grid-column:span 2}
-  .col.span-3{grid-column:span 3}
-  @media(max-width:900px){.filters{grid-template-columns:repeat(2,minmax(0,1fr))}.col.span-2{grid-column:span 2}.col.span-3{grid-column:span 2}}
-  @media(max-width:560px){.filters{grid-template-columns:1fr}.col.span-2,.col.span-3{grid-column:span 1}}
+  @media(max-width:900px){.filters{grid-template-columns:repeat(2,minmax(0,1fr))}.col.span-2{grid-column:span 2}}
+  @media(max-width:560px){.filters{grid-template-columns:1fr}.col.span-2{grid-column:span 1}}
 
   .legend{display:flex;gap:14px;align-items:center;margin:6px 12px 14px;flex-wrap:wrap}
   .legend span{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
@@ -46,7 +44,7 @@
   @media(min-width:980px){.grid{grid-template-columns:repeat(5,1fr)}}
 
   .item{border:1px solid var(--ring);border-radius:14px;overflow:hidden;background:#fff}
-  .thumb{background:#eef2f7;aspect-ratio:3/4;display:flex;align-items:center;justify-content:center}
+  .thumb{background:#eef2f7;aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;cursor:zoom-in}
   .thumb.img-short{aspect-ratio:16/9}
   .thumb img{width:100%;height:100%;object-fit:cover}
   .meta{padding:10px}
@@ -69,7 +67,10 @@
   .rarity svg{width:14px;height:14px}
   .rarity-label{font-size:12px;color:var(--muted)}
 
-  /* Rarity chips grid */
+  /* Rarity dropdown */
+  .multi{position:relative}
+  .multi-btn{width:100%;padding:10px 12px;border:1px solid var(--ring);background:#fff;border-radius:12px;cursor:pointer;text-align:left}
+  .multi-panel{position:absolute;z-index:30;top:44px;left:0;right:0;background:#fff;border:1px solid var(--ring);border-radius:12px;box-shadow:0 10px 20px rgba(0,0,0,.08);padding:10px}
   .chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
   @media(max-width:900px){.chips{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media(max-width:560px){.chips{grid-template-columns:1fr}}
@@ -77,8 +78,15 @@
   .chip input{display:none}
   .chip label{border:1px solid var(--ring);background:#fff;border-radius:999px;padding:6px 10px;display:flex;gap:6px;align-items:center;cursor:pointer;justify-content:center;font-size:13px;white-space:nowrap}
   .chip input:checked + label{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .multi-actions{display:flex;gap:8px;align-items:center;margin-top:8px;justify-content:flex-end}
   .link{background:none;border:none;color:var(--brand);cursor:pointer;padding:0;font-size:12px}
   .link:hover{text-decoration:underline}
+
+  /* Modal viewer */
+  .modal{position:fixed;inset:0;background:rgba(15,23,42,.8);display:none;align-items:center;justify-content:center;z-index:50}
+  .modal.open{display:flex}
+  .modal img{max-width:90vw;max-height:85vh;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.3);}
+  .modal .close{position:absolute;top:14px;right:18px;background:#fff;border:1px solid var(--ring);border-radius:999px;padding:6px 10px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -110,8 +118,15 @@
       <div class="filters">
         <div class="col"><label>Recherche</label><input id="q" placeholder="Nom, numéro…" type="text"></div>
         <div class="col"><label>Série</label><select id="serie"><option value="all">Toutes</option></select></div>
-        <div class="col span-2"><label>Raretés à afficher</label><div id="rarityChips" class="chips"></div><div class="hint"><button type="button" id="checkAll" class="link">Tout</button> · <button type="button" id="uncheckAll" class="link">Aucun</button></div></div>
-        <div class="col"><label><input id="owned" type="checkbox" checked> Montrer uniquement possédées</label></div>
+        <div class="col span-2"><label>Raretés</label>
+          <div class="multi">
+            <button id="rarityBtn" type="button" class="multi-btn">Toutes les raretés</button>
+            <div id="rarityDD" class="multi-panel" hidden>
+              <div id="rarityChips" class="chips"></div>
+              <div class="multi-actions"><button type="button" id="checkAll" class="link">Tout</button><span>·</span><button type="button" id="uncheckAll" class="link">Aucun</button></div>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="legend">
         <span><b>Versions :</b></span>
@@ -153,6 +168,12 @@
   <p class="hint">Ce site charge automatiquement <code>cartes.csv</code>, <code>scelle.csv</code> et <code>gradees.csv</code> s’ils sont présents à la racine du dépôt. Pour les images, mets une colonne <b>Image</b> (ou <b>Image URL</b> pour les cartes) avec une URL absolue ou un chemin relatif du repo (ex : <code>images/pikachu.jpg</code>).</p>
 </main>
 
+<!-- Modal image viewer -->
+<div id="imgModal" class="modal" aria-hidden="true">
+  <button class="close" id="modalClose">Fermer ✕</button>
+  <img id="modalImg" alt="aperçu"/>
+</div>
+
 <script>
   (document.readyState === 'loading') ? document.addEventListener('DOMContentLoaded', initApp) : initApp();
 
@@ -180,9 +201,6 @@
     // --- Mapping raretés (validé) ---
     const RARITY_MAP = {'1':'commune','2':'peu_commune','3':'rare','4':'rare','5':'rare_silver','6':'rare_silver','7':'promo','32':'double_rare','33':'illustration_rare','34':'ultra_rare_silver','35':'illustration_sr','36':'hyper_rare','39':'chromatique_ur','40':'high_tech'};
     const RARITY_LABELS = {commune:'Commune',peu_commune:'Peu commune',rare:'Rare',rare_silver:'Rare',double_rare:'Double rare',ultra_rare_silver:'Ultra rare',illustration_rare:'Illustration rare',illustration_sr:'Illustration spéciale rare',hyper_rare:'Hyper rare',chromatique_ur:'Chromatique ultra rare',high_tech:'HIGH‑TECH rare',promo:'Promo'};
-
-    // Rangs lisibles (pour tri éventuel)
-    const RARITY_RANK = {commune:1,peu_commune:2,rare:3,rare_silver:3,double_rare:4,ultra_rare_silver:5,illustration_rare:6,illustration_sr:7,hyper_rare:8,chromatique_ur:9,high_tech:10,promo:0};
     const RARITY_ORDER = ['commune','peu_commune','rare','rare_silver','double_rare','ultra_rare_silver','illustration_rare','illustration_sr','hyper_rare','chromatique_ur','high_tech'];
 
     // --- SVG helpers ---
@@ -208,36 +226,38 @@
         default: return '';
       }
     }
+
     function rarityFromRow(r){ const code=String(r['Rareté']??'').trim(); const key=RARITY_MAP[code]; return {key,label:key?RARITY_LABELS[key]:null,raw:code}; }
 
-    // ——— Chips de rareté ———
-    const selectedRarities = new Set();
-    function buildRarityChips(){
+    // ——— Raretés (dropdown à cases) ———
+    const selectedRarities = new Set(RARITY_ORDER); // par défaut: toutes
+    const rarityBtn=document.getElementById('rarityBtn');
+    const rarityDD=document.getElementById('rarityDD');
+    function buildRarityDropdown(){
       const box = document.getElementById('rarityChips');
       if(!box) return;
       box.innerHTML='';
-      selectedRarities.clear();
       RARITY_ORDER.forEach(key=>{
         const id = 'rk_'+key;
-        const wrapper = document.createElement('span');
-        wrapper.className='chip';
-        const input = document.createElement('input');
-        input.type='checkbox'; input.id=id; input.checked=true; input.dataset.key=key;
-        const label = document.createElement('label');
-        label.setAttribute('for', id);
-        label.innerHTML = `${rarityIconsByKey(key)} <span>${RARITY_LABELS[key]}</span>`;
-        wrapper.appendChild(input); wrapper.appendChild(label);
-        box.appendChild(wrapper);
-        selectedRarities.add(key);
-        input.addEventListener('change', ()=>{
-          if(input.checked) selectedRarities.add(key); else selectedRarities.delete(key);
-          render();
-        });
+        const wrap = document.createElement('span'); wrap.className='chip';
+        const input = document.createElement('input'); input.type='checkbox'; input.id=id; input.checked=true; input.dataset.key=key;
+        const label = document.createElement('label'); label.setAttribute('for', id); label.innerHTML = `${rarityIconsByKey(key)} <span>${RARITY_LABELS[key]}</span>`;
+        wrap.appendChild(input); wrap.appendChild(label); box.appendChild(wrap);
+        input.addEventListener('change', ()=>{ if(input.checked) selectedRarities.add(key); else selectedRarities.delete(key); updateRarityBtn(); render(); });
       });
-      const allBtn=document.getElementById('checkAll');
-      const noneBtn=document.getElementById('uncheckAll');
-      if(allBtn) allBtn.onclick=()=>{ selectedRarities.clear(); RARITY_ORDER.forEach(k=>{selectedRarities.add(k); const el=document.getElementById('rk_'+k); if(el) el.checked=true;}); render(); };
-      if(noneBtn) noneBtn.onclick=()=>{ RARITY_ORDER.forEach(k=>{selectedRarities.delete(k); const el=document.getElementById('rk_'+k); if(el) el.checked=false;}); render(); };
+      document.getElementById('checkAll').onclick=()=>{ selectedRarities.clear(); RARITY_ORDER.forEach(k=>{selectedRarities.add(k); const el=document.getElementById('rk_'+k); if(el) el.checked=true;}); updateRarityBtn(); render(); };
+      document.getElementById('uncheckAll').onclick=()=>{ RARITY_ORDER.forEach(k=>{selectedRarities.delete(k); const el=document.getElementById('rk_'+k); if(el) el.checked=false;}); updateRarityBtn(); render(); };
+      updateRarityBtn();
+    }
+    function updateRarityBtn(){
+      if(!rarityBtn) return;
+      if(selectedRarities.size===RARITY_ORDER.length) rarityBtn.textContent='Toutes les raretés';
+      else if(selectedRarities.size===0) rarityBtn.textContent='Aucune sélection';
+      else rarityBtn.textContent=`${selectedRarities.size} rareté(s) sélectionnée(s)`;
+    }
+    if(rarityBtn){
+      rarityBtn.addEventListener('click',()=>{ rarityDD.hidden=!rarityDD.hidden; });
+      document.addEventListener('click',(e)=>{ if(!rarityDD.hidden && !e.target.closest('.multi')) rarityDD.hidden=true; });
     }
 
     // State
@@ -276,7 +296,7 @@
       document.getElementById('load-demo').addEventListener('click', ()=>{
         CARDS=[
           {'Série':'151','Numéro':'1/165','Nom':'Bulbizarre','Rareté':'1','Nb Normal':'1','Nb Reverse':'1','Nb Spéciale':'0','Image URL':'https://images.pokemontcg.io/sv3/fr/1_hires.png'},
-          {'Série':'Écarlate et Violet','Numéro':'14/198','Nom':'Rare argent','Rareté':'5','Nb Normal':'1'},
+          {'Série':'Écarlate et Violet','Numéro':'14/198','Nom':'Rare','Rareté':'5','Nb Normal':'1'},
           {'Série':'Couronne Stellaire','Numéro':'151/142','Nom':'Zeraora (Hyper rare)','Rareté':'36','Nb Spéciale':'1','Image URL':'https://pokecardex.b-cdn.net/assets/images/sets/SCR/HD/151.jpg?class=hd'},
           {'Série':'Écarlate et Violet','Numéro':'205/198','Nom':'Chromatique UR','Rareté':'39','Nb Normal':'1'}
         ];
@@ -284,8 +304,6 @@
         GRADED=[{'Nom':'Pikachu','Edition':'SWSH','Société':'PSA','Note':'10','Détail':'Test','Image':'https://via.placeholder.com/400x250?text=PSA+10'}];
         refreshSeries(); refreshSealedFilters(); refreshCompanies(); render();
       });
-    } else {
-      buildRarityChips();
     }
 
     function parseFile(file, cb){ Papa.parse(file,{header:true,skipEmptyLines:true,complete:res=>cb(res.data)}); }
@@ -293,8 +311,7 @@
     // Filtres cartes
     const q=document.getElementById('q');
     const serie=document.getElementById('serie');
-    const owned=document.getElementById('owned');
-    q.oninput=serie.onchange=owned.onchange=()=>render();
+    q.oninput=serie.onchange=()=>render();
 
     // Filtres scellé
     const qs=document.getElementById('qs');
@@ -313,8 +330,12 @@
     if(company) company.onchange=()=>render();
     if(minG) minG.oninput=()=>{minG_label.textContent=minG.value; render();}
 
+    // Raretés UI init
+    buildRarityDropdown();
+
     function refreshSeries(){
-      buildRarityChips();
+      // met à jour le bouton (au cas où)
+      updateRarityBtn();
       const s=new Set();
       CARDS.forEach(r=>r['Série'] && s.add(String(r['Série'])));
       SEALED.forEach(r=>r['Série'] && s.add(String(r['Série'])));
@@ -346,7 +367,28 @@
       return A.localeCompare(B,'fr',{numeric:true});
     }
 
+    // Modal viewer
+    const modal=document.getElementById('imgModal');
+    const modalImg=document.getElementById('modalImg');
+    const modalClose=document.getElementById('modalClose');
+    function openModal(src,alt){ modalImg.src=src; modalImg.alt=alt||''; modal.classList.add('open'); }
+    function closeModal(){ modal.classList.remove('open'); modalImg.src=''; }
+    modalClose.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e)=>{ if(e.target===modal) closeModal(); });
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeModal(); });
+
+    function hookImageClicks(container){
+      container.addEventListener('click', (e)=>{
+        const img = e.target.closest('.thumb img');
+        if(img){ openModal(img.src, img.alt); }
+      });
+    }
+
+    hookImageClicks(document.body);
+
     function render(){
+      if(rarityDD) rarityDD.hidden=true; // referme le menu
+
       // CARTES
       const root=document.getElementById('cards-root');
       if(!(CARDS&&CARDS.length)){ root.innerHTML=`<div class='empty'>Aucun CSV cartes chargé (auto : <code>${AUTO_SOURCES.cards}</code>)</div>`; }
@@ -354,12 +396,7 @@
         let rows=CARDS.slice();
         if(serie.value!=='all') rows=rows.filter(r=>String(r['Série'])===serie.value);
         if(q.value.trim()){ const qq=q.value.toLowerCase(); rows=rows.filter(r=>['Nom','Numéro','Série'].some(k=>String(r[k]||'').toLowerCase().includes(qq))); }
-        rows=rows.filter(r=>{
-          const {key}=rarityFromRow(r);
-          if(!key) return true; // rareté inconnue → affichée
-          return selectedRarities.has(key);
-        });
-        if(owned.checked) rows=rows.filter(r=> ownedQty(r)>0 );
+        rows=rows.filter(r=>{ const {key}=rarityFromRow(r); return !key || selectedRarities.has(key); });
 
         const m=new Map(); rows.forEach(r=>{ const s=String(r['Série']||'Sans série'); if(!m.has(s)) m.set(s,[]); m.get(s).push(r); });
         const groups=Array.from(m.entries()).sort((a,b)=>a[0].localeCompare(b[0],'fr'));
