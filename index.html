@@ -480,28 +480,32 @@
       return {prefix:m[1].toUpperCase(), n:parseInt(m[2],10)};
     }
 
+    // NEW: stats avec normales + reverse + spéciales (en respectant -1 = n'existe pas)
     function computeStatsPerSeries(){
       const map = new Map();
       CARDS.forEach(r=>{
         const slug = slugify(r['Série']);
         if(!slug) return;
 
-        const nbN = Number(r['Nb Normal'])||0;
-        const nbR = Number(r['Nb Reverse'])||0;
-        const nbS = Number(r['Nb Spéciale'])||0;
+        const nbN = Number(r['Nb Normal']);
+        const nbR = Number(r['Nb Reverse']);
+        const nbS = Number(r['Nb Spéciale']);
 
         if(!map.has(slug)){
           map.set(slug, {
             slug,
             label: SERIE_CANON.get(slug) || normalize(r['Série']),
-            setSizeNum: 0,          // max du numérateur
-            subsets: {},            // { GG: 70, TG: 30, ... }
+            setSizeNum: 0,          // max du numérateur (normales)
+            subsets: {},            // { GG: 70, ... } (ajouté à la taille normales)
+            // totaux "existent" par version (reverse/spéciale comptent seulement si != -1)
+            totN: 0, totR: 0, totS: 0,
             ownedN: 0, ownedR: 0, ownedS: 0,
-            missing: []             // cartes manquantes (normales)
+            missN: [], missR: [], missS: []
           });
         }
         const o = map.get(slug);
 
+        // Taille du set normal : on prend le max du numérateur + sous-ensembles (ex: GG)
         const nd = parseNumDen(r['Numéro']);
         const sb = parseSubset(r['Numéro']);
         if(nd && Number.isFinite(nd.num)){
@@ -510,14 +514,31 @@
           o.subsets[sb.prefix] = Math.max(o.subsets[sb.prefix]||0, sb.n);
         }
 
-        if(nbN > 0) o.ownedN += 1; else o.missing.push({numero: String(r['Numéro']||'—'), nom: String(r['Nom']||'')});
-        if(nbR > 0) o.ownedR += 1;
-        if(nbS > 0) o.ownedS += 1;
+        // Normale : on suppose qu'elle "existe" si Nb Normal != -1 (dans la pratique, quasi tout existe)
+        if(nbN !== -1){
+          o.totN += 1;
+          if(nbN > 0) o.ownedN += 1;
+          else o.missN.push({numero: String(r['Numéro']||'—'), nom: String(r['Nom']||'')});
+        }
+
+        // Reverse : existe si != -1
+        if(nbR !== -1){
+          o.totR += 1;
+          if(nbR > 0) o.ownedR += 1;
+          else o.missR.push({numero: String(r['Numéro']||'—'), nom: String(r['Nom']||'')});
+        }
+
+        // Spéciale : existe si != -1
+        if(nbS !== -1){
+          o.totS += 1;
+          if(nbS > 0) o.ownedS += 1;
+          else o.missS.push({numero: String(r['Numéro']||'—'), nom: String(r['Nom']||'')});
+        }
       });
 
       const arr = Array.from(map.values()).map(o=>{
         const subsetsTotal = Object.values(o.subsets).reduce((a,b)=>a+b,0);
-        const size = (o.setSizeNum||0) + subsetsTotal;
+        const size = (o.setSizeNum||0) + subsetsTotal; // taille pour la barre = normales
         const done = Math.min(o.ownedN, size);
         const pct = (size>0) ? (done/size)*100 : 0;
         return {...o, size, done, completion:pct};
@@ -540,6 +561,7 @@
         const subsetsTxt = Object.keys(s.subsets).length
           ? ' • Sous-ensembles : ' + Object.entries(s.subsets).map(([k,v])=>`${k}: ${v}`).join(', ')
           : '';
+        const chips = (arr)=> arr.map(m=>`<span>${m.numero} • ${m.nom}</span>`).join('') || '<span class="hint">—</span>';
         html += `
           <div class="stat-row" data-slug="${s.slug}">
             <div class="stat-head">
@@ -549,16 +571,25 @@
             </div>
             <div class="stat-body">
               <div class="stat-break">
-                <div><b>Normales possédées :</b> ${s.ownedN}</div>
-                <div><b>Reverse possédées :</b> ${s.ownedR}</div>
-                <div><b>Spéciales possédées :</b> ${s.ownedS}</div>
+                <div><b>Normales :</b> ${s.ownedN} / ${s.totN}</div>
+                <div><b>Reverse :</b> ${s.ownedR} / ${s.totR}</div>
+                <div><b>Spéciales :</b> ${s.ownedS} / ${s.totS}</div>
                 ${subsetsTxt ? `<div style="color:#64748b">${subsetsTxt}</div>` : ''}
               </div>
+
               <div class="missing">
-                <h4>Manquantes (normales) — ${s.missing.length}</h4>
-                <div class="chips-list">
-                  ${s.missing.map(m=>`<span>${m.numero} • ${m.nom}</span>`).join('')}
-                </div>
+                <h4>Manquantes (normales) — ${s.missN.length}</h4>
+                <div class="chips-list">${chips(s.missN)}</div>
+              </div>
+
+              <div class="missing">
+                <h4>Manquantes (reverse) — ${s.missR.length}</h4>
+                <div class="chips-list">${chips(s.missR)}</div>
+              </div>
+
+              <div class="missing">
+                <h4>Manquantes (spéciales) — ${s.missS.length}</h4>
+                <div class="chips-list">${chips(s.missS)}</div>
               </div>
             </div>
           </div>
@@ -566,12 +597,11 @@
       });
       root.innerHTML = html;
 
-      // Un seul handler, pas d'empilement
+      // Un seul handler, stable
       root.onclick = (e)=>{
         const head = e.target.closest('.stat-head');
         if(!head) return;
-        const row = head.closest('.stat-row');
-        row.classList.toggle('open');
+        head.parentElement.classList.toggle('open');
       };
     }
 
