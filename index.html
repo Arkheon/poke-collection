@@ -134,6 +134,13 @@
       <div class="filters">
         <div class="col"><label>Recherche</label><input id="q" placeholder="Nom, numéro…" type="text"></div>
         <div class="col"><label>Série</label><select id="serie"><option value="all">Toutes</option></select></div>
+        <div class="col"><label>Vue</label>
+          <select id="view">
+            <option value="owned">Possédées</option>
+            <option value="missing">Manquantes (normales)</option>
+            <option value="all">Toutes</option>
+          </select>
+        </div>
         <div class="col span-2"><label>Raretés</label>
           <div class="multi">
             <button id="rarityBtn" type="button" class="multi-btn">Toutes les raretés</button>
@@ -221,7 +228,7 @@
       .replace(/[\u0300-\u036f]/g,'')
       .toLowerCase();
 
-    // Map slug -> libellé canonique (préférer libellé tel qu'il apparait côté cartes)
+    // Map slug -> libellé canonique
     let SERIE_CANON = new Map();
 
     // ——— Tabs ———
@@ -237,7 +244,7 @@
       render();
     }));
 
-    // --- Mapping raretés (validé) ---
+    // --- Mapping raretés ---
     const RARITY_MAP = {'1':'commune','2':'peu_commune','3':'rare','4':'rare','5':'rare_silver','6':'rare_silver','7':'promo','32':'double_rare','33':'illustration_rare','34':'ultra_rare_silver','35':'illustration_sr','36':'hyper_rare','39':'chromatique_ur','40':'high_tech'};
     const RARITY_LABELS = {commune:'Commune',peu_commune:'Peu commune',rare:'Rare',rare_silver:'Rare',double_rare:'Double rare',ultra_rare_silver:'Ultra rare',illustration_rare:'Illustration rare',illustration_sr:'Illustration spéciale rare',hyper_rare:'Hyper rare',chromatique_ur:'Chromatique ultra rare',high_tech:'HIGH-TECH rare',promo:'Promo'};
     const RARITY_ORDER = ['commune','peu_commune','rare','rare_silver','double_rare','ultra_rare_silver','illustration_rare','illustration_sr','hyper_rare','chromatique_ur','high_tech'];
@@ -338,7 +345,7 @@
           {'Série':'151','Numéro':'1/165','Nom':'Bulbizarre','Rareté':'1','Nb Normal':'1','Nb Reverse':'1','Nb Spéciale':'0','Image URL':'https://images.pokemontcg.io/sv3/fr/1_hires.png'},
           {'Série':'Écarlate et Violet','Numéro':'14/198','Nom':'Rare','Rareté':'5','Nb Normal':'1'},
           {'Série':'Couronne Stellaire','Numéro':'151/142','Nom':'Zeraora (Hyper rare)','Rareté':'36','Nb Spéciale':'1','Image URL':'https://pokecardex.b-cdn.net/assets/images/sets/SCR/HD/151.jpg?class=hd'},
-          {'Série':'Écarlate et Violet','Numéro':'205/198','Nom':'Chromatique UR','Rareté':'39','Nb Normal':'1'}
+          {'Série':'Écarlate et Violet','Numéro':'205/198','Nom':'Chromatique UR','Rareté':'39','Nb Normal':'0'}
         ];
         SEALED=[{'Série':'151','Type':'ETB','Détail':'Exemple','Commentaires':'—','Image':'https://via.placeholder.com/400x250?text=ETB+151'}];
         GRADED=[{'Nom':'Pikachu','Edition':'SWSH','Société':'PSA','Note':'10','Détail':'Test','Image':'https://via.placeholder.com/400x250?text=PSA+10'}];
@@ -351,7 +358,8 @@
     // Filtres cartes
     const q=document.getElementById('q');
     const serie=document.getElementById('serie');
-    q.oninput=serie.onchange=()=>render();
+    const view=document.getElementById('view');
+    q.oninput=serie.onchange=view.onchange=()=>render();
 
     // Filtres scellé
     const qs=document.getElementById('qs');
@@ -441,15 +449,12 @@
     const modal=document.getElementById('imgModal');
     const modalImg=document.getElementById('modalImg');
     const modalClose=document.getElementById('modalClose');
-    function openModal(src,alt){ 
-      modalImg.src=src; 
-      modalImg.alt=alt||''; 
-      modal.classList.add('open'); 
+    function openModal(src,alt){
+      modalImg.src=src; modalImg.alt=alt||''; modal.classList.add('open');
       document.body.style.overflow='hidden';
     }
-    function closeModal(){ 
-      modal.classList.remove('open'); 
-      modalImg.src=''; 
+    function closeModal(){
+      modal.classList.remove('open'); modalImg.src='';
       document.body.style.overflow='';
     }
     modalClose.addEventListener('click', closeModal);
@@ -467,18 +472,18 @@
     // ======= STATS =======
     function parseNumDen(numStr){
       const s = String(numStr||'');
-      const m = s.match(/(\d+)\s*\/\s*(\d+)/);
+      const m = s.match(/(\d+)\s*\/\s*(\d+)/); // ex 190/159
       if(!m) return {num:NaN, den:NaN};
       return {num:parseInt(m[1],10), den:parseInt(m[2],10)};
     }
 
     function computeStatsPerSeries(){
-      // Regroupe par slug + calcule set size (max den), et possessions
+      // Regroupe par slug + calcule set size = max(numérateur), et possessions (normales)
       const map = new Map();
       CARDS.forEach(r=>{
         const slug = slugify(r['Série']);
         if(!slug) return;
-        const {den} = parseNumDen(r['Numéro']);
+        const {num, den} = parseNumDen(r['Numéro']);
         const nbN = Number(r['Nb Normal'])||0;
         const nbR = Number(r['Nb Reverse'])||0;
         const nbS = Number(r['Nb Spéciale'])||0;
@@ -487,32 +492,26 @@
           map.set(slug, {
             slug,
             label: SERIE_CANON.get(slug) || normalize(r['Série']),
-            setSize: 0,
-            ownedN: 0,
-            ownedR: 0,
-            ownedS: 0
+            setSize: 0,              // max(num)
+            ownedN: 0, ownedR: 0, ownedS: 0
           });
         }
         const o = map.get(slug);
-        if(Number.isFinite(den) && den>o.setSize) o.setSize = den;
-
+        if(Number.isFinite(num) && num>o.setSize) o.setSize = num; // <-- prend le max du NUMÉRATEUR
         if(nbN > 0) o.ownedN += 1;
         if(nbR > 0) o.ownedR += 1;
         if(nbS > 0) o.ownedS += 1;
       });
-      // Array + completion
       const arr = Array.from(map.values()).map(o=>{
         const size = o.setSize || 0;
-        const done = Math.min(o.ownedN, size); // borne au max
+        const done = Math.min(o.ownedN, size);
         const pct = (size>0) ? (done/size)*100 : 0;
         return {...o, completion: pct, done, size};
       });
-      // tri par complétion décroissante puis label
       arr.sort((a,b)=> b.completion - a.completion || a.label.localeCompare(b.label,'fr'));
       return arr;
     }
 
-    // Rendu stats
     function renderStats(){
       const root = document.getElementById('stats-root');
       const data = computeStatsPerSeries();
@@ -541,8 +540,6 @@
         `;
       });
       root.innerHTML = html;
-
-      // toggle détail
       root.addEventListener('click', (e)=>{
         const head = e.target.closest('.stat-head');
         if(!head) return;
@@ -551,6 +548,7 @@
       });
     }
 
+    // Rendu global
     function render(){
       // CARTES
       const root=document.getElementById('cards-root');
@@ -565,8 +563,19 @@
           const qq=q.value.toLowerCase();
           rows=rows.filter(r=>['Nom','Numéro','Série'].some(k=>String(r[k]||'').toLowerCase().includes(qq)));
         }
+
+        // Vue (possédées / manquantes / toutes)
+        const mode = view.value; // 'owned' | 'missing' | 'all'
+        if(mode==='owned'){
+          rows = rows.filter(r => (Number(r['Nb Normal'])>0) || (Number(r['Nb Reverse'])>0) || (Number(r['Nb Spéciale'])>0) || (Number(r['Nb Ed1'])>0));
+        }else if(mode==='missing'){
+          rows = rows.filter(r => (Number(r['Nb Normal'])<=0)); // manquantes normales seulement
+        }
+
+        // Raretés cochées
         rows=rows.filter(r=>{ const {key}=rarityFromRow(r); return !key || selectedRarities.has(key); });
 
+        // Groupes par série
         const groupsMap = new Map();
         rows.forEach(r=>{
           const sl = slugify(r['Série']);
@@ -680,6 +689,8 @@
       // STATS
       renderStats();
     }
+
+    function parseFile(file, cb){ Papa.parse(file,{header:true,skipEmptyLines:true,complete:res=>cb(res.data)}); }
   }
 </script>
 </body>
