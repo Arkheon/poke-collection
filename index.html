@@ -19,7 +19,7 @@
   .btn:hover{box-shadow:0 1px 0 rgba(0,0,0,.05)}
   .hint{font-size:12px;color:var(--muted)}
 
-  .tabs{max-width:1150px;margin:14px auto 0;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:0 16px}
+  .tabs{max-width:1150px;margin:14px auto 0;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:0 16px}
   .tab{padding:12px;border:1px solid var(--ring);border-radius:12px;background:#fff;text-align:center;cursor:pointer;user-select:none}
   .tab.active{background:var(--brand);color:#fff;border-color:var(--brand)}
 
@@ -87,6 +87,20 @@
   .modal.open{display:flex}
   .modal img{max-width:90vw;max-height:85vh;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.3)}
   .modal .close{position:absolute;top:14px;right:18px;background:#fff;border:1px solid var(--ring);border-radius:999px;padding:6px 10px;cursor:pointer}
+
+  /* ===== Stats ===== */
+  .stats-wrap{display:flex;flex-direction:column;gap:12px;padding:12px}
+  .stat-row{border:1px solid var(--ring);border-radius:12px;background:#fff;overflow:hidden}
+  .stat-head{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px;cursor:pointer}
+  .stat-title{font-weight:600}
+  .progress{flex:1;height:12px;background:var(--bg);border:1px solid var(--ring);border-radius:999px;overflow:hidden;margin:0 12px}
+  .progress > span{display:block;height:100%;width:0;border-radius:999px;
+    background:linear-gradient(90deg,#ef4444 0%, #f59e0b 50%, #10b981 100%);
+    transition:width .3s ease}
+  .stat-meta{font-size:12px;color:var(--muted);min-width:110px;text-align:right}
+  .stat-body{display:none;border-top:1px solid var(--ring);padding:12px;background:#f9fafb}
+  .stat-row.open .stat-body{display:block}
+  .stat-break{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--ink)}
 </style>
 </head>
 <body>
@@ -109,9 +123,11 @@
   <div class="tab active" data-tab="cards">Cartes</div>
   <div class="tab" data-tab="sealed">Scellé</div>
   <div class="tab" data-tab="graded">Gradées</div>
+  <div class="tab" data-tab="stats">Stats</div>
 </div>
 
 <main>
+  <!-- CARTES -->
   <section class="panel" id="panel-cards">
     <div class="card">
       <h3>Filtres</h3>
@@ -135,10 +151,10 @@
         <span><i class="ball blue"></i> Spéciale</span>
       </div>
     </div>
-
     <div id="cards-root" class="section"></div>
   </section>
 
+  <!-- SCELLÉ -->
   <section class="panel" id="panel-sealed" style="display:none">
     <div class="card">
       <h3>Filtres scellé</h3>
@@ -152,6 +168,7 @@
     <div id="sealed-root" class="section"></div>
   </section>
 
+  <!-- GRADÉES -->
   <section class="panel" id="panel-graded" style="display:none">
     <div class="card">
       <h3>Filtres gradées</h3>
@@ -163,6 +180,14 @@
       </div>
     </div>
     <div id="graded-root" class="section"></div>
+  </section>
+
+  <!-- STATS -->
+  <section class="panel" id="panel-stats" style="display:none">
+    <div class="card">
+      <h3>Statistiques de complétion</h3>
+      <div id="stats-root" class="stats-wrap"></div>
+    </div>
   </section>
 
   <p class="hint">Ce site charge automatiquement <code>cartes.csv</code>, <code>scelle.csv</code> et <code>gradees.csv</code> s’ils sont présents à la racine du dépôt. Pour les images, mets une colonne <b>Image</b> (ou <b>Image URL</b> pour les cartes) avec une URL absolue ou un chemin relatif du repo (ex : <code>images/pikachu.jpg</code>).</p>
@@ -188,15 +213,15 @@
 
     // Helpers de normalisation (accents/espaces) + slug
     const normalize = (s) => String(s ?? '')
-      .normalize('NFC')          // normalise Unicode
-      .trim()                    // supprime espaces début/fin
-      .replace(/\s+/g,' ');      // condense espaces internes
+      .normalize('NFC')
+      .trim()
+      .replace(/\s+/g,' ');
     const slugify = (s) => normalize(s)
-      .normalize('NFD')                // décompose accents
-      .replace(/[\u0300-\u036f]/g,'')  // retire diacritiques
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'')
       .toLowerCase();
 
-    // Map slug -> libellé canonique (préférer libellé tel que présent dans le CSV cartes)
+    // Map slug -> libellé canonique (préférer libellé tel qu'il apparait côté cartes)
     let SERIE_CANON = new Map();
 
     // ——— Tabs ———
@@ -205,9 +230,10 @@
       tabs.forEach(x => x.classList.remove('active'));
       t.classList.add('active');
       const name = t.dataset.tab;
-      document.getElementById('panel-cards').style.display = (name==='cards')?'block':'none';
-      document.getElementById('panel-sealed').style.display = (name==='sealed')?'block':'none';
-      document.getElementById('panel-graded').style.display = (name==='graded')?'block':'none';
+      document.getElementById('panel-cards').style.display   = (name==='cards') ? 'block' : 'none';
+      document.getElementById('panel-sealed').style.display  = (name==='sealed')? 'block' : 'none';
+      document.getElementById('panel-graded').style.display  = (name==='graded')? 'block' : 'none';
+      document.getElementById('panel-stats').style.display   = (name==='stats') ? 'block' : 'none';
       render();
     }));
 
@@ -350,14 +376,12 @@
     // ——————————— Normalisation & menus séries ———————————
     function rebuildSerieCanon() {
       const map = new Map();
-      // On préfère le libellé tel qu'il apparaît dans le CSV des cartes
       CARDS.forEach(r=>{
         const raw = normalize(r['Série']);
         if(!raw) return;
         const sl = slugify(raw);
         if(!map.has(sl)) map.set(sl, raw);
       });
-      // Puis on ajoute les scellés si nouveaux slugs
       SEALED.forEach(r=>{
         const raw = normalize(r['Série']);
         if(!raw) return;
@@ -369,7 +393,6 @@
 
     function refreshSeries(){
       rebuildSerieCanon();
-      // options de la liste séries (valeur = slug, libellé = canonique)
       const options = ['all', ...Array.from(SERIE_CANON.keys()).sort((a,b)=>{
         return SERIE_CANON.get(a).localeCompare(SERIE_CANON.get(b),'fr');
       })];
@@ -378,7 +401,6 @@
         return `<option value="${sl}">${sl==='all' ? 'Toutes' : SERIE_CANON.get(sl)}</option>`;
       }).join('');
 
-      // Séries pour l’onglet scellé
       const sSet = new Set(SEALED.map(r=>slugify(r['Série']||'')));
       const sList = ['all', ...Array.from(sSet).filter(Boolean).sort((a,b)=>{
         return SERIE_CANON.get(a)?.localeCompare(SERIE_CANON.get(b),'fr');
@@ -393,7 +415,6 @@
 
     function refreshSealedFilters(){
       if(!(SEALED && SEALED.length)) return;
-      // Types scellés
       const t=new Set();
       SEALED.forEach(r=>{ const raw = normalize(r['Type']); if(raw) t.add(raw); });
       const tOpt=['all',...Array.from(t).sort((a,b)=>a.localeCompare(b,'fr'))];
@@ -441,8 +462,94 @@
         if(img){ openModal(img.src, img.alt); }
       });
     }
-
     hookImageClicks(document.body);
+
+    // ======= STATS =======
+    function parseNumDen(numStr){
+      const s = String(numStr||'');
+      const m = s.match(/(\d+)\s*\/\s*(\d+)/);
+      if(!m) return {num:NaN, den:NaN};
+      return {num:parseInt(m[1],10), den:parseInt(m[2],10)};
+    }
+
+    function computeStatsPerSeries(){
+      // Regroupe par slug + calcule set size (max den), et possessions
+      const map = new Map();
+      CARDS.forEach(r=>{
+        const slug = slugify(r['Série']);
+        if(!slug) return;
+        const {den} = parseNumDen(r['Numéro']);
+        const nbN = Number(r['Nb Normal'])||0;
+        const nbR = Number(r['Nb Reverse'])||0;
+        const nbS = Number(r['Nb Spéciale'])||0;
+
+        if(!map.has(slug)){
+          map.set(slug, {
+            slug,
+            label: SERIE_CANON.get(slug) || normalize(r['Série']),
+            setSize: 0,
+            ownedN: 0,
+            ownedR: 0,
+            ownedS: 0
+          });
+        }
+        const o = map.get(slug);
+        if(Number.isFinite(den) && den>o.setSize) o.setSize = den;
+
+        if(nbN > 0) o.ownedN += 1;
+        if(nbR > 0) o.ownedR += 1;
+        if(nbS > 0) o.ownedS += 1;
+      });
+      // Array + completion
+      const arr = Array.from(map.values()).map(o=>{
+        const size = o.setSize || 0;
+        const done = Math.min(o.ownedN, size); // borne au max
+        const pct = (size>0) ? (done/size)*100 : 0;
+        return {...o, completion: pct, done, size};
+      });
+      // tri par complétion décroissante puis label
+      arr.sort((a,b)=> b.completion - a.completion || a.label.localeCompare(b.label,'fr'));
+      return arr;
+    }
+
+    // Rendu stats
+    function renderStats(){
+      const root = document.getElementById('stats-root');
+      const data = computeStatsPerSeries();
+      if(!data.length){
+        root.innerHTML = `<div class="empty">Pas de données cartes chargées.</div>`;
+        return;
+      }
+      let html = '';
+      data.forEach(s=>{
+        const pct = Math.max(0, Math.min(100, s.completion));
+        html += `
+          <div class="stat-row" data-slug="${s.slug}">
+            <div class="stat-head">
+              <div class="stat-title">${s.label}</div>
+              <div class="progress"><span style="width:${pct.toFixed(2)}%"></span></div>
+              <div class="stat-meta">${s.done} / ${s.size} (${pct.toFixed(1)}%)</div>
+            </div>
+            <div class="stat-body">
+              <div class="stat-break">
+                <div><b>Normales possédées :</b> ${s.ownedN}</div>
+                <div><b>Reverse possédées :</b> ${s.ownedR}</div>
+                <div><b>Spéciales possédées :</b> ${s.ownedS}</div>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      root.innerHTML = html;
+
+      // toggle détail
+      root.addEventListener('click', (e)=>{
+        const head = e.target.closest('.stat-head');
+        if(!head) return;
+        const row = head.closest('.stat-row');
+        row.classList.toggle('open');
+      });
+    }
 
     function render(){
       // CARTES
@@ -460,7 +567,6 @@
         }
         rows=rows.filter(r=>{ const {key}=rarityFromRow(r); return !key || selectedRarities.has(key); });
 
-        // Groupes par slug de série, titre = libellé canonique
         const groupsMap = new Map();
         rows.forEach(r=>{
           const sl = slugify(r['Série']);
@@ -570,6 +676,9 @@
         html+=`</div>`;
         rootG.innerHTML=html||`<div class='empty'>Aucun résultat.</div>`;
       }
+
+      // STATS
+      renderStats();
     }
   }
 </script>
