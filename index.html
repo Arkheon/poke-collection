@@ -21,7 +21,7 @@
 
   /* Tabs pill */
   .tabs{max-width:1150px;margin:14px auto 0;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:0 16px}
-  .tab{padding:12px;border:1px solid var(--ring);border-radius:12px;background:#fff;text-align:center;cursor:pointer}
+  .tab{padding:12px;border:1px solid var(--ring);border-radius:12px;background:#fff;text-align:center;cursor:pointer;user-select:none}
   .tab.active{background:var(--brand);color:#fff;border-color:var(--brand)}
 
   main{max-width:1150px;margin:0 auto;padding:16px}
@@ -71,10 +71,11 @@
     <img alt="pokeball" src="https://upload.wikimedia.org/wikipedia/commons/5/53/Pok%C3%A9_Ball_icon.svg" style="width:22px;height:22px">
     <h1>Ma collection Pokémon (Lite)</h1>
     <div class="bar">
-      <!-- Les boutons d'upload restent visibles comme fallback -->
-      <label class="btn">Cartes CSV <input id="csv-cards" type="file" accept=".csv" hidden></label>
-      <label class="btn">Scellé CSV <input id="csv-sealed" type="file" accept=".csv" hidden></label>
-      <label class="btn">Gradées CSV <input id="csv-graded" type="file" accept=".csv" hidden></label>
+      <span class="uploads">
+        <label class="btn">Cartes CSV <input id="csv-cards" type="file" accept=".csv" hidden></label>
+        <label class="btn">Scellé CSV <input id="csv-sealed" type="file" accept=".csv" hidden></label>
+        <label class="btn">Gradées CSV <input id="csv-graded" type="file" accept=".csv" hidden></label>
+      </span>
       <button id="load-demo" class="btn">Exemple</button>
     </div>
   </div>
@@ -131,6 +132,23 @@
   (document.readyState === 'loading') ? document.addEventListener('DOMContentLoaded', initApp) : initApp();
 
   function initApp(){
+    // ——— Configuration d'affichage ———
+    const params = new URLSearchParams(location.search);
+    const SHOW_UPLOADS = params.has('upload'); // ajoute ?upload pour réafficher les boutons si besoin
+    if(!SHOW_UPLOADS){ const up = document.querySelector('.uploads'); if(up) up.style.display='none'; }
+
+    // ——— Tabs ———
+    const tabs = document.querySelectorAll('.tab');
+    tabs.forEach(t => t.addEventListener('click', () => {
+      tabs.forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      const name = t.dataset.tab;
+      document.getElementById('panel-cards').style.display = (name==='cards')?'block':'none';
+      document.getElementById('panel-sealed').style.display = (name==='sealed')?'block':'none';
+      document.getElementById('panel-graded').style.display = (name==='graded')?'block':'none';
+      render();
+    }));
+
     // --- Mapping raretés (validé) ---
     const RARITY_MAP = {'1':'commune','2':'peu_commune','3':'rare','4':'rare','5':'rare_silver','6':'rare_silver','7':'promo','32':'double_rare','33':'illustration_rare','34':'ultra_rare_silver','35':'illustration_sr','36':'hyper_rare','39':'chromatique_ur','40':'high_tech'};
     const RARITY_LABELS = {commune:'Commune',peu_commune:'Peu commune',rare:'Rare',rare_silver:'Rare (argent)',double_rare:'Double rare',ultra_rare_silver:'Ultra rare (argent)',illustration_rare:'Illustration rare',illustration_sr:'Illustration spéciale rare',hyper_rare:'Hyper rare',chromatique_ur:'Chromatique ultra rare',high_tech:'HIGH‑TECH rare',promo:'Promo'};
@@ -173,26 +191,27 @@
         .catch(err=>{ console.warn('CSV auto-load failed for', url, err); onError && onError(err); });
     }
 
-    // Essaye de charger automatiquement. Si échec, les boutons d'upload restent utilisables.
+    // Auto-load. Si échec, les uploads restent disponibles via ?upload
     loadCsvFromUrl(AUTO_SOURCES.cards, rows=>{ CARDS=normalizeRows(rows); refreshSeries(); render(); });
     loadCsvFromUrl(AUTO_SOURCES.sealed, rows=>{ SEALED=normalizeRows(rows); refreshSeries(); render(); });
     loadCsvFromUrl(AUTO_SOURCES.graded, rows=>{ GRADED=normalizeRows(rows); refreshCompanies(); render(); });
 
-    // --- Normalisation basique des clés/valeurs ---
     function normalizeRows(rows){
       return rows.map(r=>Object.fromEntries(Object.entries(r).map(([k,v])=>[String(k).trim(), typeof v==='string'? v.trim(): v])));
     }
 
-    // Upload fallback (optionnel)
-    document.getElementById('csv-cards').addEventListener('change', e=>{
-      const f=e.target.files?.[0]; if(!f) return; parseFile(f, rows=>{ CARDS=normalizeRows(rows); refreshSeries(); render(); });
-    });
-    document.getElementById('csv-sealed').addEventListener('change', e=>{
-      const f=e.target.files?.[0]; if(!f) return; parseFile(f, rows=>{ SEALED=normalizeRows(rows); refreshSeries(); render(); });
-    });
-    document.getElementById('csv-graded').addEventListener('change', e=>{
-      const f=e.target.files?.[0]; if(!f) return; parseFile(f, rows=>{ GRADED=normalizeRows(rows); refreshCompanies(); render(); });
-    });
+    // Upload fallback (visible seulement avec ?upload)
+    if(SHOW_UPLOADS){
+      document.getElementById('csv-cards').addEventListener('change', e=>{
+        const f=e.target.files?.[0]; if(!f) return; parseFile(f, rows=>{ CARDS=normalizeRows(rows); refreshSeries(); render(); });
+      });
+      document.getElementById('csv-sealed').addEventListener('change', e=>{
+        const f=e.target.files?.[0]; if(!f) return; parseFile(f, rows=>{ SEALED=normalizeRows(rows); refreshSeries(); render(); });
+      });
+      document.getElementById('csv-graded').addEventListener('change', e=>{
+        const f=e.target.files?.[0]; if(!f) return; parseFile(f, rows=>{ GRADED=normalizeRows(rows); refreshCompanies(); render(); });
+      });
+    }
 
     function parseFile(file, cb){ Papa.parse(file,{header:true,skipEmptyLines:true,complete:res=>cb(res.data)}); }
 
