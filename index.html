@@ -26,10 +26,16 @@
   main{max-width:1150px;margin:0 auto;padding:16px}
   .card{background:var(--panel);border:1px solid var(--ring);border-radius:16px;overflow:hidden}
   .card h3{margin:0;font-size:14px;padding:12px;border-bottom:1px solid var(--ring)}
+
+  /* Filters grid */
   .filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;padding:12px}
   .filters .col{display:flex;flex-direction:column;gap:6px}
   .filters input[type="text"], .filters select{width:100%;padding:10px 12px;border:1px solid var(--ring);border-radius:12px;background:#f8fafc}
   .filters input[type="checkbox"]{transform:translateY(2px)}
+  .col.span-2{grid-column:span 2}
+  .col.span-3{grid-column:span 3}
+  @media(max-width:900px){.filters{grid-template-columns:repeat(2,minmax(0,1fr))}.col.span-2{grid-column:span 2}.col.span-3{grid-column:span 2}}
+  @media(max-width:560px){.filters{grid-template-columns:1fr}.col.span-2,.col.span-3{grid-column:span 1}}
 
   .legend{display:flex;gap:14px;align-items:center;margin:6px 12px 14px;flex-wrap:wrap}
   .legend span{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
@@ -63,11 +69,13 @@
   .rarity svg{width:14px;height:14px}
   .rarity-label{font-size:12px;color:var(--muted)}
 
-  /* Rarity chips */
-  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  /* Rarity chips grid */
+  .chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  @media(max-width:900px){.chips{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:560px){.chips{grid-template-columns:1fr}}
   .chip{display:inline-flex;align-items:center}
   .chip input{display:none}
-  .chip label{border:1px solid var(--ring);background:#fff;border-radius:999px;padding:6px 10px;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+  .chip label{border:1px solid var(--ring);background:#fff;border-radius:999px;padding:6px 10px;display:flex;gap:6px;align-items:center;cursor:pointer;justify-content:center;font-size:13px;white-space:nowrap}
   .chip input:checked + label{background:var(--brand);color:#fff;border-color:var(--brand)}
   .link{background:none;border:none;color:var(--brand);cursor:pointer;padding:0;font-size:12px}
   .link:hover{text-decoration:underline}
@@ -102,7 +110,7 @@
       <div class="filters">
         <div class="col"><label>Recherche</label><input id="q" placeholder="Nom, numéro…" type="text"></div>
         <div class="col"><label>Série</label><select id="serie"><option value="all">Toutes</option></select></div>
-        <div class="col"><label>Raretés à afficher</label><div id="rarityChips" class="chips"></div><div class="hint"><button type="button" id="checkAll" class="link">Tout</button> · <button type="button" id="uncheckAll" class="link">Aucun</button></div></div>
+        <div class="col span-2"><label>Raretés à afficher</label><div id="rarityChips" class="chips"></div><div class="hint"><button type="button" id="checkAll" class="link">Tout</button> · <button type="button" id="uncheckAll" class="link">Aucun</button></div></div>
         <div class="col"><label><input id="owned" type="checkbox" checked> Montrer uniquement possédées</label></div>
       </div>
       <div class="legend">
@@ -171,7 +179,7 @@
 
     // --- Mapping raretés (validé) ---
     const RARITY_MAP = {'1':'commune','2':'peu_commune','3':'rare','4':'rare','5':'rare_silver','6':'rare_silver','7':'promo','32':'double_rare','33':'illustration_rare','34':'ultra_rare_silver','35':'illustration_sr','36':'hyper_rare','39':'chromatique_ur','40':'high_tech'};
-    const RARITY_LABELS = {commune:'Commune',peu_commune:'Peu commune',rare:'Rare',rare_silver:'Rare (argent)',double_rare:'Double rare',ultra_rare_silver:'Ultra rare (argent)',illustration_rare:'Illustration rare',illustration_sr:'Illustration spéciale rare',hyper_rare:'Hyper rare',chromatique_ur:'Chromatique ultra rare',high_tech:'HIGH‑TECH rare',promo:'Promo'};
+    const RARITY_LABELS = {commune:'Commune',peu_commune:'Peu commune',rare:'Rare',rare_silver:'Rare',double_rare:'Double rare',ultra_rare_silver:'Ultra rare',illustration_rare:'Illustration rare',illustration_sr:'Illustration spéciale rare',hyper_rare:'Hyper rare',chromatique_ur:'Chromatique ultra rare',high_tech:'HIGH‑TECH rare',promo:'Promo'};
 
     // Rangs lisibles (pour tri éventuel)
     const RARITY_RANK = {commune:1,peu_commune:2,rare:3,rare_silver:3,double_rare:4,ultra_rare_silver:5,illustration_rare:6,illustration_sr:7,hyper_rare:8,chromatique_ur:9,high_tech:10,promo:0};
