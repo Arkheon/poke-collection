@@ -24,7 +24,7 @@
   .tab.active{background:var(--brand);color:#fff;border-color:var(--brand)}
 
   main{max-width:1150px;margin:0 auto;padding:16px}
-  .card{background:var(--panel);border:1px solid var(--ring);border-radius:16px;overflow:hidden}
+  .card{background:var(--panel);border:1px solid var(--ring);border-radius:16px;overflow:visible}
   .card h3{margin:0;font-size:14px;padding:12px;border-bottom:1px solid var(--ring)}
 
   /* Filters grid */
@@ -70,7 +70,7 @@
   /* Rarity dropdown */
   .multi{position:relative;overflow: visible;}
   .multi-btn{width:100%;padding:10px 12px;border:1px solid var(--ring);background:#fff;border-radius:12px;cursor:pointer;text-align:left}
-  .multi-panel{position:absolute;z-index:30;top:44px;left:0;right:0;background:#fff;border:1px solid var(--ring);border-radius:12px;box-shadow:0 10px 20px rgba(0,0,0,.08);padding:10px}
+  .multi-panel{position:absolute;z-index:30;top:44px;left:0;right:0;background:#fff;border:1px solid var(--ring);border-radius:12px;box-shadow:0 10px 20px rgba(0,0,0,.08);padding:10px;max-height:40vh;overflow:auto}
   .chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
   @media(max-width:900px){.chips{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media(max-width:560px){.chips{grid-template-columns:1fr}}
