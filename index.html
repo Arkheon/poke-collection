@@ -62,6 +62,15 @@
   .rarity{display:inline-flex;gap:4px;align-items:center}
   .rarity svg{width:14px;height:14px}
   .rarity-label{font-size:12px;color:var(--muted)}
+
+  /* Rarity chips */
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{display:inline-flex;align-items:center}
+  .chip input{display:none}
+  .chip label{border:1px solid var(--ring);background:#fff;border-radius:999px;padding:6px 10px;display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+  .chip input:checked + label{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .link{background:none;border:none;color:var(--brand);cursor:pointer;padding:0;font-size:12px}
+  .link:hover{text-decoration:underline}
 </style>
 </head>
 <body>
@@ -93,7 +102,7 @@
       <div class="filters">
         <div class="col"><label>Recherche</label><input id="q" placeholder="Nom, numéro…" type="text"></div>
         <div class="col"><label>Série</label><select id="serie"><option value="all">Toutes</option></select></div>
-        <div class="col"><label>Rareté minimale</label><select id="minRsel"><option value="0">Toutes les raretés</option></select></div>
+        <div class="col"><label>Raretés à afficher</label><div id="rarityChips" class="chips"></div><div class="hint"><button type="button" id="checkAll" class="link">Tout</button> · <button type="button" id="uncheckAll" class="link">Aucun</button></div></div>
         <div class="col"><label><input id="owned" type="checkbox" checked> Montrer uniquement possédées</label></div>
       </div>
       <div class="legend">
@@ -164,7 +173,7 @@
     const RARITY_MAP = {'1':'commune','2':'peu_commune','3':'rare','4':'rare','5':'rare_silver','6':'rare_silver','7':'promo','32':'double_rare','33':'illustration_rare','34':'ultra_rare_silver','35':'illustration_sr','36':'hyper_rare','39':'chromatique_ur','40':'high_tech'};
     const RARITY_LABELS = {commune:'Commune',peu_commune:'Peu commune',rare:'Rare',rare_silver:'Rare (argent)',double_rare:'Double rare',ultra_rare_silver:'Ultra rare (argent)',illustration_rare:'Illustration rare',illustration_sr:'Illustration spéciale rare',hyper_rare:'Hyper rare',chromatique_ur:'Chromatique ultra rare',high_tech:'HIGH‑TECH rare',promo:'Promo'};
 
-    // Rangs lisibles (pour filtrer par palier)
+    // Rangs lisibles (pour tri éventuel)
     const RARITY_RANK = {commune:1,peu_commune:2,rare:3,rare_silver:3,double_rare:4,ultra_rare_silver:5,illustration_rare:6,illustration_sr:7,hyper_rare:8,chromatique_ur:9,high_tech:10,promo:0};
     const RARITY_ORDER = ['commune','peu_commune','rare','rare_silver','double_rare','ultra_rare_silver','illustration_rare','illustration_sr','hyper_rare','chromatique_ur','high_tech'];
 
@@ -193,16 +202,34 @@
     }
     function rarityFromRow(r){ const code=String(r['Rareté']??'').trim(); const key=RARITY_MAP[code]; return {key,label:key?RARITY_LABELS[key]:null,raw:code}; }
 
-    // Remplir le sélecteur de rareté
-    function buildRaritySelect(){
-      const sel = document.getElementById('minRsel');
-      if(!sel) return;
+    // ——— Chips de rareté ———
+    const selectedRarities = new Set();
+    function buildRarityChips(){
+      const box = document.getElementById('rarityChips');
+      if(!box) return;
+      box.innerHTML='';
+      selectedRarities.clear();
       RARITY_ORDER.forEach(key=>{
-        const opt = document.createElement('option');
-        opt.value = String(RARITY_RANK[key]);
-        opt.textContent = `Au moins · ${RARITY_LABELS[key]}`;
-        sel.appendChild(opt);
+        const id = 'rk_'+key;
+        const wrapper = document.createElement('span');
+        wrapper.className='chip';
+        const input = document.createElement('input');
+        input.type='checkbox'; input.id=id; input.checked=true; input.dataset.key=key;
+        const label = document.createElement('label');
+        label.setAttribute('for', id);
+        label.innerHTML = `${rarityIconsByKey(key)} <span>${RARITY_LABELS[key]}</span>`;
+        wrapper.appendChild(input); wrapper.appendChild(label);
+        box.appendChild(wrapper);
+        selectedRarities.add(key);
+        input.addEventListener('change', ()=>{
+          if(input.checked) selectedRarities.add(key); else selectedRarities.delete(key);
+          render();
+        });
       });
+      const allBtn=document.getElementById('checkAll');
+      const noneBtn=document.getElementById('uncheckAll');
+      if(allBtn) allBtn.onclick=()=>{ selectedRarities.clear(); RARITY_ORDER.forEach(k=>{selectedRarities.add(k); const el=document.getElementById('rk_'+k); if(el) el.checked=true;}); render(); };
+      if(noneBtn) noneBtn.onclick=()=>{ RARITY_ORDER.forEach(k=>{selectedRarities.delete(k); const el=document.getElementById('rk_'+k); if(el) el.checked=false;}); render(); };
     }
 
     // State
@@ -227,7 +254,7 @@
       return rows.map(r=>Object.fromEntries(Object.entries(r).map(([k,v])=>[String(k).trim(), typeof v==='string'? v.trim(): v])));
     }
 
-    // Upload fallback (visible seulement avec ?upload)
+    // Upload fallback (?upload)
     if(SHOW_UPLOADS){
       document.getElementById('csv-cards').addEventListener('change', e=>{
         const f=e.target.files?.[0]; if(!f) return; parseFile(f, rows=>{ CARDS=normalizeRows(rows); refreshSeries(); render(); });
@@ -250,8 +277,7 @@
         refreshSeries(); refreshSealedFilters(); refreshCompanies(); render();
       });
     } else {
-      // Pas d'uploads : remplit quand même la liste de raretés
-      buildRaritySelect();
+      buildRarityChips();
     }
 
     function parseFile(file, cb){ Papa.parse(file,{header:true,skipEmptyLines:true,complete:res=>cb(res.data)}); }
@@ -259,10 +285,8 @@
     // Filtres cartes
     const q=document.getElementById('q');
     const serie=document.getElementById('serie');
-    const minRsel=document.getElementById('minRsel');
     const owned=document.getElementById('owned');
     q.oninput=serie.onchange=owned.onchange=()=>render();
-    if(minRsel) minRsel.onchange=()=>render();
 
     // Filtres scellé
     const qs=document.getElementById('qs');
@@ -282,7 +306,7 @@
     if(minG) minG.oninput=()=>{minG_label.textContent=minG.value; render();}
 
     function refreshSeries(){
-      buildRaritySelect();
+      buildRarityChips();
       const s=new Set();
       CARDS.forEach(r=>r['Série'] && s.add(String(r['Série'])));
       SEALED.forEach(r=>r['Série'] && s.add(String(r['Série'])));
@@ -324,9 +348,8 @@
         if(q.value.trim()){ const qq=q.value.toLowerCase(); rows=rows.filter(r=>['Nom','Numéro','Série'].some(k=>String(r[k]||'').toLowerCase().includes(qq))); }
         rows=rows.filter(r=>{
           const {key}=rarityFromRow(r);
-          const rank = key? RARITY_RANK[key] : 0;
-          const minRank = Number(minRsel?.value||0);
-          return rank >= minRank;
+          if(!key) return true; // rareté inconnue → affichée
+          return selectedRarities.has(key);
         });
         if(owned.checked) rows=rows.filter(r=> ownedQty(r)>0 );
 
