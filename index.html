@@ -68,26 +68,19 @@
   .rarity-label{font-size:12px;color:var(--muted)}
 
   /* Rarity dropdown */
-  .multi{position:relative;overflow: visible;}
+  .multi{position:relative}
   .multi-btn{width:100%;padding:10px 12px;border:1px solid var(--ring);background:#fff;border-radius:12px;cursor:pointer;text-align:left}
   .multi-panel{position:absolute;z-index:30;top:44px;left:0;right:0;background:#fff;border:1px solid var(--ring);border-radius:12px;box-shadow:0 10px 20px rgba(0,0,0,.08);padding:10px;max-height:40vh;overflow:auto}
-  .chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-  @media(max-width:900px){.chips{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  @media(max-width:560px){.chips{grid-template-columns:1fr}}
+  .chips{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+  @media(max-width:900px){.chips{grid-template-columns:repeat(4,minmax(0,1fr))}}
+  @media(max-width:560px){.chips{grid-template-columns:repeat(3,minmax(0,1fr))}}
   .chip{display:inline-flex;align-items:center}
   .chip input{display:none}
-  .chip label{border:1px solid var(--ring);background:#fff;border-radius:999px;padding:6px 10px;display:flex;gap:6px;align-items:center;cursor:pointer;justify-content:center;font-size:13px;white-space:nowrap}
+  .chip label{border:1px solid var(--ring);background:#fff;border-radius:10px;width:36px;height:36px;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer}
   .chip input:checked + label{background:var(--brand);color:#fff;border-color:var(--brand)}
-  .multi-actions{display:flex;gap:8px;align-items:center;margin-top:8px;justify-content:flex-end}
   .link{background:none;border:none;color:var(--brand);cursor:pointer;padding:0;font-size:12px}
   .link:hover{text-decoration:underline}
-  .filters .col.span-2 {overflow: visible;}
-
-  /* Modal viewer */
-  .modal{position:fixed;inset:0;background:rgba(15,23,42,.8);display:none;align-items:center;justify-content:center;z-index:50}
-  .modal.open{display:flex}
-  .modal img{max-width:90vw;max-height:85vh;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.3);}
-  .modal .close{position:absolute;top:14px;right:18px;background:#fff;border:1px solid var(--ring);border-radius:999px;padding:6px 10px;cursor:pointer}
+  .multi-actions{display:flex;gap:8px;align-items:center;margin-top:8px;justify-content:flex-end}
 </style>
 </head>
 <body>
@@ -242,7 +235,7 @@
         const id = 'rk_'+key;
         const wrap = document.createElement('span'); wrap.className='chip';
         const input = document.createElement('input'); input.type='checkbox'; input.id=id; input.checked=true; input.dataset.key=key;
-        const label = document.createElement('label'); label.setAttribute('for', id); label.innerHTML = `${rarityIconsByKey(key)} <span>${RARITY_LABELS[key]}</span>`;
+        const label = document.createElement('label'); label.setAttribute('for', id); label.innerHTML = rarityIconsByKey(key); label.title = RARITY_LABELS[key];
         wrap.appendChild(input); wrap.appendChild(label); box.appendChild(wrap);
         input.addEventListener('change', ()=>{ if(input.checked) selectedRarities.add(key); else selectedRarities.delete(key); updateRarityBtn(); render(); });
       });
@@ -257,21 +250,12 @@
       else rarityBtn.textContent=`${selectedRarities.size} rareté(s) sélectionnée(s)`;
     }
     if(rarityBtn){
-      rarityBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      rarityDD.hidden = !rarityDD.hidden;
-    });
-
-      rarityDD.addEventListener('click', (e) => {
-    // Empêche la fermeture lors des clics sur le contenu du menu
-      e.stopPropagation();
-    });
-  
-      document.addEventListener('click', (e) => {
-        if (!rarityDD.hidden && !e.target.closest('.multi')) {
-          rarityDD.hidden = true;
-  }
-});
+      // Ouvrir/fermer via le bouton
+      rarityBtn.addEventListener('click', (e) => { e.stopPropagation(); rarityDD.hidden = !rarityDD.hidden; });
+      // Empêcher la fermeture au clic dans le contenu du menu
+      rarityDD.addEventListener('click', (e) => { e.stopPropagation(); });
+      // Fermer uniquement si clic à l'extérieur
+      document.addEventListener('click', (e) => { if (!rarityDD.hidden && !e.target.closest('.multi')) { rarityDD.hidden = true; } });
     }
 
     // State
@@ -348,7 +332,6 @@
     buildRarityDropdown();
 
     function refreshSeries(){
-      // met à jour le bouton (au cas où)
       updateRarityBtn();
       const s=new Set();
       CARDS.forEach(r=>r['Série'] && s.add(String(r['Série'])));
@@ -401,7 +384,7 @@
     hookImageClicks(document.body);
 
     function render(){
-      if(rarityDD) rarityDD.hidden=true; // referme le menu
+      // IMPORTANT : ne pas refermer le menu ici — on le ferme seulement via clic extérieur
 
       // CARTES
       const root=document.getElementById('cards-root');
