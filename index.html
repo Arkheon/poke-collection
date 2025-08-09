@@ -450,79 +450,88 @@
       return {prefix:m[1].toUpperCase(), n:parseInt(m[2],10)};
     }
 
-    function computeStatsPerSeries(){
-      const map = new Map();
-      CARDS.forEach(r=>{
-        const slug = slugify(r['Série']); if(!slug) return;
+function computeStatsPerSeries(){
+  const map = new Map();
+  CARDS.forEach(r=>{
+    const slug = slugify(r['Série']); if(!slug) return;
 
-        const nbN = Number(r['Nb Normal']);
-        const nbR = Number(r['Nb Reverse']);
-        const nbS = Number(r['Nb Spéciale']);  // ici = nb alternatifs possédés
-        const alt = Number(r['Alternative']);   // -1 pas d'alter, 1 existe
-        const grad = Number(r['Gradées']);
+    const nbN = Number(r['Nb Normal']);
+    const nbR = Number(r['Nb Reverse']);
+    const nbS = Number(r['Nb Spéciale']);      // nb d’alternatives possédées
+    const alt = Number(r['Alternative'] ?? -1); // -1 pas d’alternative, 1 = existe
+    const grad = Number(r['Gradées'] ?? 0);     // 2=PCA, 4=PSA
 
-        if(!map.has(slug)){
-          map.set(slug, {
-            slug,
-            label: SERIE_CANON.get(slug) || normalize(r['Série']),
-            setSizeNum: 0,
-            subsets: {},
-            // totaux / possédés
-            totN: 0, totR: 0, totAlt: 0,
-            ownedN: 0, ownedR: 0, ownedAlt: 0,
-            // listes manquantes
-            missN: [], missR: [], missAlt: [],
-            // gradées
-            gradedTotal: 0, gradedPCA: 0, gradedPSA: 0
-          });
-        }
-        const o = map.get(slug);
-
-        const nd = parseNumDen(r['Numéro']);
-        const sb = parseSubset(r['Numéro']);
-        if(nd && Number.isFinite(nd.num)){
-          if(nd.num > o.setSizeNum) o.setSizeNum = nd.num;
-        }else if(sb && Number.isFinite(sb.n)){
-          o.subsets[sb.prefix] = Math.max(o.subsets[sb.prefix]||0, sb.n);
-        }
-
-        // Normales
-        if(nbN !== -1){
-          o.totN += 1;
-          if(nbN > 0) o.ownedN += 1;
-          else o.missN.push({numero:String(r['Numéro']||'—'), nom:String(r['Nom']||'')});
-        }
-        // Reverse
-        if(nbR !== -1){
-          o.totR += 1;
-          if(nbR > 0) o.ownedR += 1;
-          else o.missR.push({numero:String(r['Numéro']||'—'), nom:String(r['Nom']||'')});
-        }
-        // Alternatives (nouvelle logique)
-        if(alt === 1){
-          o.totAlt += 1;
-          if(nbS > 0) o.ownedAlt += 1;
-          else o.missAlt.push({numero:String(r['Numéro']||'—'), nom:String(r['Nom']||'')});
-        }
-
-        // Gradées
-        if(grad === 2 || grad === 4){
-          o.gradedTotal += 1;
-          if(grad === 2) o.gradedPCA += 1;
-          if(grad === 4) o.gradedPSA += 1;
-        }
+    if(!map.has(slug)){
+      map.set(slug, {
+        slug,
+        label: SERIE_CANON.get(slug) || normalize(r['Série']),
+        // comptages de taille
+        sizeN: 0,
+        sizeSub: 0,
+        // totaux par version
+        totN: 0, totR: 0,
+        // alternatives
+        totAlt: 0, ownedAlt: 0, missAlt: [],
+        // gradées
+        gradedTotal: 0, gradedPCA: 0, gradedPSA: 0,
+        // possession / manquantes
+        ownedN: 0, ownedR: 0,
+        missN: [], missR: []
       });
-
-      const arr = Array.from(map.values()).map(o=>{
-        const subsetsTotal = Object.values(o.subsets).reduce((a,b)=>a+b,0);
-        const size = (o.setSizeNum||0) + subsetsTotal; // barre = normales
-        const done = Math.min(o.ownedN, size);
-        const pct = (size>0) ? (done/size)*100 : 0;
-        return {...o, size, done, completion:pct};
-      });
-      arr.sort((a,b)=> b.completion - a.completion || a.label.localeCompare(b.label,'fr'));
-      return arr;
     }
+    const o = map.get(slug);
+
+    // Déterminer si c’est une carte normale (x/y) ou un sous-ensemble (GGxx, TGxx…)
+    const numStr = String(r['Numéro']||'').trim();
+    const isNumDen = /^\d+\s*\/\s*\d+$/i.test(numStr);
+    const isSubset = /^[A-Za-z]+\s*0*?\d{1,3}$/i.test(numStr);
+
+    // ---- Taille : on compte les cartes qui existent (Nb Normal != -1)
+    if (nbN !== -1) {
+      if (isNumDen) o.sizeN += 1;
+      else if (isSubset) o.sizeSub += 1;
+    }
+
+    // ---- Normales
+    if (nbN !== -1) {
+      o.totN += 1;
+      if (nbN > 0) o.ownedN += 1;
+      else o.missN.push({numero: numStr || '—', nom: String(r['Nom']||'')});
+    }
+
+    // ---- Reverse
+    if (nbR !== -1) {
+      o.totR += 1;
+      if (nbR > 0) o.ownedR += 1;
+      else o.missR.push({numero: numStr || '—', nom: String(r['Nom']||'')});
+    }
+
+    // ---- Alternatives (nouvelle logique)
+    if (alt === 1) {
+      o.totAlt += 1;
+      if (nbS > 0) o.ownedAlt += 1;
+      else o.missAlt.push({numero: numStr || '—', nom: String(r['Nom']||'')});
+    }
+
+    // ---- Gradées
+    if (grad === 2 || grad === 4) {
+      o.gradedTotal += 1;
+      if (grad === 2) o.gradedPCA += 1;
+      if (grad === 4) o.gradedPSA += 1;
+    }
+  });
+
+  const arr = Array.from(map.values()).map(o=>{
+    const sizeTotal = o.sizeN + o.sizeSub;      // -> “taille du set” réelle
+    const done = Math.min(o.ownedN, sizeTotal); // sécurité anti-dépassement
+    const pct = sizeTotal ? (done / sizeTotal) * 100 : 0;
+    return {...o, size: sizeTotal, done, completion: pct};
+  });
+
+  arr.sort((a,b)=> b.completion - a.completion || a.label.localeCompare(b.label,'fr'));
+  return arr;
+}
+
 
     function renderStats(){
       const root = document.getElementById('stats-root');
