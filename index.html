@@ -101,6 +101,10 @@
   .stat-body{display:none;border-top:1px solid var(--ring);padding:12px;background:#f9fafb}
   .stat-row.open .stat-body{display:block}
   .stat-break{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--ink)}
+  .missing{margin-top:8px}
+  .missing h4{margin:8px 0 4px 0;font-size:13px;color:var(--muted)}
+  .chips-list{display:flex;flex-wrap:wrap;gap:6px}
+  .chips-list span{background:#fff;border:1px solid var(--ring);border-radius:999px;padding:4px 8px;font-size:12px}
 </style>
 </head>
 <body>
@@ -218,17 +222,10 @@
       const demoBtn = document.getElementById('load-demo'); if(demoBtn) demoBtn.style.display='none';
     }
 
-    // Helpers de normalisation (accents/espaces) + slug
-    const normalize = (s) => String(s ?? '')
-      .normalize('NFC')
-      .trim()
-      .replace(/\s+/g,' ');
-    const slugify = (s) => normalize(s)
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g,'')
-      .toLowerCase();
+    // Helpers de normalisation + slug
+    const normalize = (s) => String(s ?? '').normalize('NFC').trim().replace(/\s+/g,' ');
+    const slugify = (s) => normalize(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 
-    // Map slug -> libellé canonique
     let SERIE_CANON = new Map();
 
     // ——— Tabs ———
@@ -344,8 +341,8 @@
         CARDS=[
           {'Série':'151','Numéro':'1/165','Nom':'Bulbizarre','Rareté':'1','Nb Normal':'1','Nb Reverse':'1','Nb Spéciale':'0','Image URL':'https://images.pokemontcg.io/sv3/fr/1_hires.png'},
           {'Série':'Écarlate et Violet','Numéro':'14/198','Nom':'Rare','Rareté':'5','Nb Normal':'1'},
-          {'Série':'Couronne Stellaire','Numéro':'151/142','Nom':'Zeraora (Hyper rare)','Rareté':'36','Nb Spéciale':'1','Image URL':'https://pokecardex.b-cdn.net/assets/images/sets/SCR/HD/151.jpg?class=hd'},
-          {'Série':'Écarlate et Violet','Numéro':'205/198','Nom':'Chromatique UR','Rareté':'39','Nb Normal':'0'}
+          {'Série':'Zénith Suprême','Numéro':'GG05','Nom':'Lokhlass','Rareté':'33','Nb Normal':'1'},
+          {'Série':'Couronne Stellaire','Numéro':'151/142','Nom':'Zeraora (Hyper rare)','Rareté':'36','Nb Spéciale':'1','Image URL':'https://pokecardex.b-cdn.net/assets/images/sets/SCR/HD/151.jpg?class=hd'}
         ];
         SEALED=[{'Série':'151','Type':'ETB','Détail':'Exemple','Commentaires':'—','Image':'https://via.placeholder.com/400x250?text=ETB+151'}];
         GRADED=[{'Nom':'Pikachu','Edition':'SWSH','Société':'PSA','Note':'10','Détail':'Test','Image':'https://via.placeholder.com/400x250?text=PSA+10'}];
@@ -378,7 +375,7 @@
     if(company) company.onchange=()=>render();
     if(minG) minG.oninput=()=>{minG_label.textContent=minG.value; render();}
 
-    // Raretés UI init
+    // Raretés UI
     buildRarityDropdown();
 
     // ——————————— Normalisation & menus séries ———————————
@@ -471,19 +468,24 @@
 
     // ======= STATS =======
     function parseNumDen(numStr){
-      const s = String(numStr||'');
-      const m = s.match(/(\d+)\s*\/\s*(\d+)/); // ex 190/159
-      if(!m) return {num:NaN, den:NaN};
+      const s = String(numStr||'').trim();
+      const m = s.match(/^(\d+)\s*\/\s*(\d+)$/i); // ex 190/159
+      if(!m) return null;
       return {num:parseInt(m[1],10), den:parseInt(m[2],10)};
+    }
+    function parseSubset(numStr){
+      const s = String(numStr||'').trim();
+      const m = s.match(/^([A-Za-z]+)\s*0*?(\d{1,3})$/i); // ex GG05
+      if(!m) return null;
+      return {prefix:m[1].toUpperCase(), n:parseInt(m[2],10)};
     }
 
     function computeStatsPerSeries(){
-      // Regroupe par slug + calcule set size = max(numérateur), et possessions (normales)
       const map = new Map();
       CARDS.forEach(r=>{
         const slug = slugify(r['Série']);
         if(!slug) return;
-        const {num, den} = parseNumDen(r['Numéro']);
+
         const nbN = Number(r['Nb Normal'])||0;
         const nbR = Number(r['Nb Reverse'])||0;
         const nbS = Number(r['Nb Spéciale'])||0;
@@ -492,21 +494,33 @@
           map.set(slug, {
             slug,
             label: SERIE_CANON.get(slug) || normalize(r['Série']),
-            setSize: 0,              // max(num)
-            ownedN: 0, ownedR: 0, ownedS: 0
+            setSizeNum: 0,          // max du numérateur
+            subsets: {},            // { GG: 70, TG: 30, ... }
+            ownedN: 0, ownedR: 0, ownedS: 0,
+            missing: []             // cartes manquantes (normales)
           });
         }
         const o = map.get(slug);
-        if(Number.isFinite(num) && num>o.setSize) o.setSize = num; // <-- prend le max du NUMÉRATEUR
-        if(nbN > 0) o.ownedN += 1;
+
+        const nd = parseNumDen(r['Numéro']);
+        const sb = parseSubset(r['Numéro']);
+        if(nd && Number.isFinite(nd.num)){
+          if(nd.num > o.setSizeNum) o.setSizeNum = nd.num;
+        }else if(sb && Number.isFinite(sb.n)){
+          o.subsets[sb.prefix] = Math.max(o.subsets[sb.prefix]||0, sb.n);
+        }
+
+        if(nbN > 0) o.ownedN += 1; else o.missing.push({numero: String(r['Numéro']||'—'), nom: String(r['Nom']||'')});
         if(nbR > 0) o.ownedR += 1;
         if(nbS > 0) o.ownedS += 1;
       });
+
       const arr = Array.from(map.values()).map(o=>{
-        const size = o.setSize || 0;
+        const subsetsTotal = Object.values(o.subsets).reduce((a,b)=>a+b,0);
+        const size = (o.setSizeNum||0) + subsetsTotal;
         const done = Math.min(o.ownedN, size);
         const pct = (size>0) ? (done/size)*100 : 0;
-        return {...o, completion: pct, done, size};
+        return {...o, size, done, completion:pct};
       });
       arr.sort((a,b)=> b.completion - a.completion || a.label.localeCompare(b.label,'fr'));
       return arr;
@@ -517,16 +531,20 @@
       const data = computeStatsPerSeries();
       if(!data.length){
         root.innerHTML = `<div class="empty">Pas de données cartes chargées.</div>`;
+        root.onclick = null;
         return;
       }
       let html = '';
       data.forEach(s=>{
         const pct = Math.max(0, Math.min(100, s.completion));
+        const subsetsTxt = Object.keys(s.subsets).length
+          ? ' • Sous-ensembles : ' + Object.entries(s.subsets).map(([k,v])=>`${k}: ${v}`).join(', ')
+          : '';
         html += `
           <div class="stat-row" data-slug="${s.slug}">
             <div class="stat-head">
               <div class="stat-title">${s.label}</div>
-              <div class="progress"><span style="width:${pct.toFixed(2)}%"></span></div>
+              <div class="progress" aria-hidden="true"><span style="width:${pct.toFixed(2)}%"></span></div>
               <div class="stat-meta">${s.done} / ${s.size} (${pct.toFixed(1)}%)</div>
             </div>
             <div class="stat-body">
@@ -534,18 +552,27 @@
                 <div><b>Normales possédées :</b> ${s.ownedN}</div>
                 <div><b>Reverse possédées :</b> ${s.ownedR}</div>
                 <div><b>Spéciales possédées :</b> ${s.ownedS}</div>
+                ${subsetsTxt ? `<div style="color:#64748b">${subsetsTxt}</div>` : ''}
+              </div>
+              <div class="missing">
+                <h4>Manquantes (normales) — ${s.missing.length}</h4>
+                <div class="chips-list">
+                  ${s.missing.map(m=>`<span>${m.numero} • ${m.nom}</span>`).join('')}
+                </div>
               </div>
             </div>
           </div>
         `;
       });
       root.innerHTML = html;
-      root.addEventListener('click', (e)=>{
+
+      // Un seul handler, pas d'empilement
+      root.onclick = (e)=>{
         const head = e.target.closest('.stat-head');
         if(!head) return;
         const row = head.closest('.stat-row');
         row.classList.toggle('open');
-      });
+      };
     }
 
     // Rendu global
@@ -559,17 +586,18 @@
         if(selectedSlug !== 'all'){
           rows = rows.filter(r => slugify(r['Série']) === selectedSlug);
         }
+        const q = document.getElementById('q');
         if(q.value.trim()){
           const qq=q.value.toLowerCase();
           rows=rows.filter(r=>['Nom','Numéro','Série'].some(k=>String(r[k]||'').toLowerCase().includes(qq)));
         }
 
         // Vue (possédées / manquantes / toutes)
-        const mode = view.value; // 'owned' | 'missing' | 'all'
+        const mode = document.getElementById('view').value;
         if(mode==='owned'){
           rows = rows.filter(r => (Number(r['Nb Normal'])>0) || (Number(r['Nb Reverse'])>0) || (Number(r['Nb Spéciale'])>0) || (Number(r['Nb Ed1'])>0));
         }else if(mode==='missing'){
-          rows = rows.filter(r => (Number(r['Nb Normal'])<=0)); // manquantes normales seulement
+          rows = rows.filter(r => (Number(r['Nb Normal'])<=0));
         }
 
         // Raretés cochées
@@ -619,8 +647,10 @@
       if(!(SEALED&&SEALED.length)){ rootS.innerHTML=`<div class='empty'>Aucun CSV scellé chargé (auto : <code>${AUTO_SOURCES.sealed}</code>)</div>`; }
       else{
         let rows=SEALED.slice();
-        const selectedSlugS = serieS ? serieS.value : 'all';
-        if(serieS && selectedSlugS!=='all') rows=rows.filter(r=>slugify(r['Série'])===selectedSlugS);
+        const selectedSlugS = document.getElementById('serieS') ? document.getElementById('serieS').value : 'all';
+        const qs = document.getElementById('qs');
+        const typeS = document.getElementById('typeS');
+        if(selectedSlugS!=='all') rows=rows.filter(r=>slugify(r['Série'])===selectedSlugS);
         if(typeS && typeS.value!=='all') rows=rows.filter(r=>normalize(r['Type']||'')===typeS.value);
         if(qs && qs.value.trim()){
           const qq=qs.value.toLowerCase();
@@ -663,10 +693,10 @@
       if(!(GRADED&&GRADED.length)){ rootG.innerHTML=`<div class='empty'>Aucun CSV gradées chargé (auto : <code>${AUTO_SOURCES.graded}</code>)</div>`; }
       else{
         let rows=GRADED.slice();
-        if(company.value!=='all') rows=rows.filter(r=>String(r['Société'])===company.value);
-        if(qg && qg.value.trim()){ const qq=qg.value.toLowerCase(); rows=rows.filter(r=>['Nom','Edition','Détail'].some(k=>String(r[k]||'').toLowerCase().includes(qq))); }
+        if(document.getElementById('company').value!=='all') rows=rows.filter(r=>String(r['Société'])===document.getElementById('company').value);
+        if(document.getElementById('qg').value.trim()){ const qq=document.getElementById('qg').value.toLowerCase(); rows=rows.filter(r=>['Nom','Edition','Détail'].some(k=>String(r[k]||'').toLowerCase().includes(qq))); }
         const parseNote = v => { const s=String(v??'').replace(',', '.').trim(); const n=parseFloat(s); return Number.isFinite(n)? n : NaN; };
-        const min=parseNote(minG.value);
+        const min=parseNote(document.getElementById('minG').value);
         rows=rows.filter(r=>{ const n=parseNote(r['Note']); return Number.isNaN(n)? true : n>=min; });
         rows.sort((a,b)=> String(a['Nom']||'').localeCompare(String(b['Nom']||''),'fr'));
         let html=`<div class='grid' style='grid-template-columns:repeat(3,1fr)'>`;
