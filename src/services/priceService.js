@@ -26,7 +26,7 @@ export async function getSetPrices(setId) {
 
   PRICE_CACHE.set(setId, 'loading');
   try {
-    const r = await fetch(`public/prices/${setId}.json`, { cache: 'no-store' });
+    const r = await fetch(`prices/${setId}.json`, { cache: 'no-store' });
     const j = await r.json();
     const items = j.items || {};
     PRICE_CACHE.set(setId, items);
