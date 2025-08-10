@@ -176,74 +176,77 @@ function initApp(){
 
   buildRarityDropdown();
 
+// Essaye de charger un setId sans jeter d'erreur si le JSON n'existe pas
+async function safeGet(setId){
+  try { return setId ? await getSetPrices(setId) : null; }
+  catch { return null; }
+}
+  
   // charge les prix pour la série + sous-sets (GG/TG) puis annote le tableau
-  async function annotateRowsWithPrices(slug, arr){
-    await loadFrMap();
+async function annotateRowsWithPrices(slug, arr){
+  await loadFrMap();
 
-    const setIdMain = getSetIdFromSlug(slug);
-    const setIdGG   = getSetIdFromSlug(`${slug}-gg`);
-    const setIdTG   = getSetIdFromSlug(`${slug}-tg`);
+  const mainId0 = getSetIdFromSlug(slug);
+  let   ggId0   = getSetIdFromSlug(`${slug}-gg`);
+  let   tgId0   = getSetIdFromSlug(`${slug}-tg`);
 
+  // Fallbacks si la map ne renvoie rien pour -gg / -tg
+  const mainId = mainId0 || null;
+  const ggId   = ggId0 || (mainId ? `${mainId}gg` : null);
+  const tgId   = tgId0 || (mainId ? `${mainId}tg` : null);
 
-    
-    const [dMain, dGG, dTG] = await Promise.all([
-      setIdMain ? getSetPrices(setIdMain) : Promise.resolve(null),
-      setIdGG   ? getSetPrices(setIdGG)   : Promise.resolve(null),
-      setIdTG   ? getSetPrices(setIdTG)   : Promise.resolve(null),
-    ]);
-    
-    // accepte soit {items:{...}} soit directement {...}
-    const unwrap = (x)=> (x && x.items) ? x.items : x;
-    const itemsMain = unwrap(dMain) || null;
-    const itemsGG   = unwrap(dGG)   || null;
-    const itemsTG   = unwrap(dTG)   || null;
+  const [dMain, dGG, dTG] = await Promise.all([
+    safeGet(mainId),
+    safeGet(ggId),
+    safeGet(tgId),
+  ]);
 
-    console.debug('setIds', { setIdMain, setIdGG, setIdTG });
-    console.debug('GG keys sample', (itemsGG && Object.keys(itemsGG).slice(0,5)) || null);
-    
-    const isGG = s => /^GG\d+/i.test(String(s||'').trim());
-    const isTG = s => /^TG\d+/i.test(String(s||'').trim());
+  // Accepte soit { items:{...} } soit {...}
+  const unwrap = (x)=> (x && x.items) ? x.items : x;
+  const itemsMain = unwrap(dMain) || null;
+  const itemsGG   = unwrap(dGG)   || null;
+  const itemsTG   = unwrap(dTG)   || null;
 
-    // "14/198" -> 14, "GG05"/"TG01" -> 5, sinon la clé brute
-    const normIndex = raw => {
-      const s = String(raw ?? '').trim();
-      const m1 = s.match(/^(\d+)\/\d+$/);         if (m1) return parseInt(m1[1],10);
-      const m2 = s.match(/^(?:GG|TG)?0*(\d+)$/i); if (m2) return parseInt(m2[1],10);
-      const n  = parseInt(s,10);                  return Number.isFinite(n) ? n : s.toUpperCase();
-    };
+  console.debug('setIds', { mainId, ggId, tgId });
+  console.debug('GG keys sample', (itemsGG && Object.keys(itemsGG).slice(0,5)) || null);
 
-    const lookup = num => {
-      const raw  = String(num||'').trim().toUpperCase();
-      const pool = isGG(raw) ? itemsGG : isTG(raw) ? itemsTG : itemsMain;
-      if (!pool) return null;
-      const k = normIndex(raw);
-      return pool[raw] ?? pool[k] ?? pool[String(k)] ?? null;
-    };
+  const isGG = s => /^GG\d+/i.test(String(s||'').trim());
+  const isTG = s => /^TG\d+/i.test(String(s||'').trim());
 
-    let added = false;
-    arr.forEach(r=>{
-      const raw = String(r['Numéro']||'').toUpperCase();
-      const entry = lookup(raw);
-      if (!entry) return;
+  const normIndex = raw => {
+    const s = String(raw ?? '').trim();
+    const m1 = s.match(/^(\d+)\/\d+$/);         if (m1) return parseInt(m1[1],10);
+    const m2 = s.match(/^(?:GG|TG)?0*(\d+)$/i); if (m2) return parseInt(m2[1],10);
+    const n  = parseInt(s,10);                  return Number.isFinite(n) ? n : s.toUpperCase();
+  };
 
-      // GG/TG = on utilise toujours le prix "normal"
-      const price = (isGG(raw) || isTG(raw))
-        ? priceFromEntry(entry, 'normal')
-        : choosePrice(entry, r);
+  const lookup = num => {
+    const raw  = String(num||'').trim().toUpperCase();
+    const pool = isGG(raw) ? itemsGG : isTG(raw) ? itemsTG : itemsMain;
+    if (!pool) return null;
+    const k = normIndex(raw);
+    return pool[raw] ?? pool[k] ?? pool[String(k)] ?? null;
+  };
 
-      if (price != null) {
-        const euro = eur(Number(price));
-        if (r['Prix'] !== euro) { // évite les re-renders inutiles
-          r['Prix'] = euro;
-          added = true;
-        }
-      }
-    });
+  let changed = false;
+  arr.forEach(r=>{
+    const raw = String(r['Numéro']||'').toUpperCase();
+    const entry = lookup(raw);
+    if (!entry) return;
 
-    if (added) {
-      scheduleRender(30); // redraw léger
+    const price = (/^(GG|TG)/i.test(raw))
+      ? priceFromEntry(entry, 'normal') // GG/TG = toujours “normal”
+      : choosePrice(entry, r);
+
+    if (price != null) {
+      const euro = eur(Number(price));
+      if (r['Prix'] !== euro) { r['Prix'] = euro; changed = true; }
     }
-  }
+  });
+
+  if (changed) scheduleRender(30);
+}
+
 
   // Helpers prix par variante (utilisés côté stats si besoin)
   function priceFromEntry(entry, variant){
