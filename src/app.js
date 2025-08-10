@@ -282,23 +282,36 @@ function initApp(){
     return arr;
   }
 
-// ===== Valeur / Top 10 par série (gère aussi le sous-set GG) =====
+// ===== Valeur / Top 10 par série (gère aussi les sous-sets GG/TG) =====
 async function computePriceStatsForSeries(slug){
-  // Assure la map FR -> setId chargée
   await loadFrMap();
 
-  // set principal (ex: swsh12pt5) + éventuel sous-set (ex: swsh12pt5gg)
-  const mainId = getSetIdFromSlug(slug);
-  const ggId   = getSetIdFromSlug(slug + '-gg'); // nécessite la clé dans fr_map.json
+  const baseSetId = getSetIdFromSlug(slug);
+  if (!baseSetId) return { available:false };
 
-  if (!mainId && !ggId) return { available:false };
-
-  const [mainItems, ggItems] = await Promise.all([
-    mainId ? getSetPrices(mainId) : Promise.resolve(null),
-    ggId   ? getSetPrices(ggId)   : Promise.resolve(null),
-  ]);
-
+  // Toutes les lignes de la série
   const rows = CARDS.filter(r => slugify(r['Série']) === slug);
+
+  // Détermine si la série contient des numéros GG ou TG
+  const needGG = rows.some(r => /^GG/i.test(String(r['Numéro']||'').trim()));
+  const needTG = rows.some(r => /^TG/i.test(String(r['Numéro']||'').trim()));
+
+  // Essaie d’obtenir les setId de sous-sets via fr_map.json; fallback si manquant
+  const ggSetId = needGG
+    ? (getSetIdFromSlug(`${slug}-gg`) || `${baseSetId}gg`) // ex: swsh12pt5 -> swsh12pt5gg
+    : null;
+
+  const tgSetId = needTG
+    ? (getSetIdFromSlug(`${slug}-tg`) || (() => {
+        const m = /^swsh(\d+)/.exec(baseSetId); // ex: swsh12 -> swsh12tg
+        return m ? `swsh${m[1]}tg` : null;
+      })())
+    : null;
+
+  // Charge les prix nécessaires
+  const itemsMain = await getSetPrices(baseSetId);
+  const itemsGG   = ggSetId ? await getSetPrices(ggSetId) : null;
+  const itemsTG   = tgSetId ? await getSetPrices(tgSetId) : null;
 
   const sum = {
     setU : { normal:0, reverse:0, alt:0 },
@@ -309,71 +322,93 @@ async function computePriceStatsForSeries(slug){
 
   const pNorm = (e) => Number(e?.trend ?? e?.avg30 ?? e?.avg7 ?? e?.low ?? 0) || 0;
   const pRev  = (e) => Number(e?.reverseTrend ?? 0) || pNorm(e);
-  const qPos  = (v) => { const n = Number(String(v ?? '').replace(',','.')); return Number.isFinite(n) ? Math.max(0,n) : 0; };
+  const posInt = (v) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? Math.max(0, n) : 0; };
 
-  for (const r of rows){
-    const numRaw = String(r['Numéro'] || '').trim();          // ex: "36/159" ou "GG05"
-    const idx    = Number(baseNumber(r));                     // 36 dans "36/159"
-    const entry  = mainItems?.[idx];
+  // Helper: renvoie l’entrée de prix correcte pour une ligne
+  function getPriceEntryForRow(r){
+    const numRaw = String(r['Numéro']||'').trim().toUpperCase();
 
-    const hasN   = Number(r['Nb Normal'])   !== -1;
-    const hasR   = Number(r['Nb Reverse'])  !== -1;
-    const hasAlt = Number(r['Alternative']) === 1;
-
-    // Prix normal / reverse du set principal
-    const nPrice = hasN ? pNorm(entry) : 0;
-    const rPrice = hasR ? pRev(entry)  : 0;
-
-    // Prix "Alternative"
-    let aPrice = 0;
-    if (hasAlt){
-      if (ggItems && /^GG/i.test(numRaw)) {
-        // Carte de la gallerie GG -> on va chercher dans le set ...gg
-        const ggNum   = parseInt(numRaw.replace(/\D/g,''), 10); // "GG05" -> 5
-        const ggEntry = ggItems?.[ggNum] ?? ggItems?.[numRaw] ?? ggItems?.['GG' + String(ggNum).padStart(2,'0')];
-        aPrice = pNorm(ggEntry);
-      } else {
-        // Autres séries "alt" : fallback reverse -> normal
-        aPrice = pRev(entry) || pNorm(entry);
-      }
+    // Sous-set GG
+    if (/^GG\d+/.test(numRaw)) {
+      // Les clés du JSON GG sont "GG01", "GG19", …
+      return itemsGG ? itemsGG[numRaw] : null;
     }
 
-    // Set unique (1 exemplaire par version existante)
+    // Sous-set TG (souvent "TG01/TG30" dans le CSV → clé "TG01" dans le JSON)
+    if (/^TG\d+/.test(numRaw)) {
+      const m = /^TG(\d+)/.exec(numRaw);
+      const code = m ? `TG${String(m[1]).padStart(2,'0')}` : numRaw.replace(/\/.*$/, '');
+      return itemsTG ? (itemsTG[code] || itemsTG[numRaw]) : null;
+    }
+
+    // Cas standard: index numérique
+    const idx = Number(baseNumber(r));
+    return itemsMain[idx];
+  }
+
+  for (const r of rows){
+    const numRaw = String(r['Numéro']||'').trim().toUpperCase();
+    const isGG   = /^GG\d+/.test(numRaw);
+    const isTG   = /^TG\d+/.test(numRaw);
+    const isSub  = isGG || isTG;
+
+    const e = getPriceEntryForRow(r);
+    if (!e) continue;
+
+    // Présences / quantités (on ne compte pas GG/TG en "normal")
+    const hasN   = !isSub && (Number(r['Nb Normal'])  !== -1);
+    const hasR   =          (Number(r['Nb Reverse']) !== -1);
+    const hasAlt = (Number(r['Alternative']) === 1) || isSub;
+
+    const nPrice = hasN   ? pNorm(e) : 0;
+    const rPrice = hasR   ? pRev(e)  : 0;
+
+    // Pour GG/TG, on range dans "alt" avec prix normal
+    const aPrice = hasAlt ? (isSub ? pNorm(e) : (pRev(e) || pNorm(e))) : 0;
+
+    // Set unique (1 par version existante)
     if (hasN)   sum.setU.normal  += nPrice;
     if (hasR)   sum.setU.reverse += rPrice;
     if (hasAlt) sum.setU.alt     += aPrice;
 
-    // Possédé (unique) : 1 par version possédée
-    const qN = qPos(r['Nb Normal']) + qPos(r['Nb Ed1']);
-    const qR = hasR   ? qPos(r['Nb Reverse'])                         : 0;
-    const qA = hasAlt ? qPos(r['Nb Spéciale'] ?? r['Nb Speciale'])    : 0;
+    // Quantités possédées
+    const qN_std = posInt(r['Nb Normal']) + posInt(r['Nb Ed1']);           // standard
+    const qR     = hasR ? posInt(r['Nb Reverse']) : 0;
 
-    if (qN > 0) sum.ownU.normal  += nPrice;
-    if (qR > 0) sum.ownU.reverse += rPrice;
-    if (qA > 0) sum.ownU.alt     += aPrice;
+    // Alt: pour GG/TG on utilise Nb Normal comme quantité; sinon Nb Spéciale
+    const qA     = isSub
+      ? posInt(r['Nb Normal'])
+      : posInt(r['Nb Spéciale'] ?? r['Nb Speciale']);
+
+    // Possédé (unique) : 1 par version possédée
+    if (!isSub && qN_std > 0) sum.ownU.normal  += nPrice;
+    if (qR > 0)               sum.ownU.reverse += rPrice;
+    if (qA > 0)               sum.ownU.alt     += aPrice;
 
     // Possédé (doublons) : quantités réelles
-    sum.ownD.normal  += qN * nPrice;
+    if (!isSub) {
+      sum.ownD.normal  += qN_std * nPrice;
+    }
     sum.ownD.reverse += qR * rPrice;
     sum.ownD.alt     += qA * aPrice;
 
-    // Top 10 (prix normal). On inclut aussi GG (leur "normal" = prix du sous-set)
-    if (nPrice > 0) topAll.push({ numero:numRaw, nom:String(r['Nom']||''), price:nPrice });
-    if (aPrice > 0 && hasAlt) topAll.push({ numero:numRaw, nom:String(r['Nom']||''), price:aPrice });
+    // Top 10 (on prend le prix "normal" — pour GG/TG c’est le seul)
+    topAll.push({ numero:String(r['Numéro']||'—'), nom:String(r['Nom']||''), price:pNorm(e) });
   }
 
   const withTotal = (o) => ({ ...o, total: o.normal + o.reverse + o.alt });
   topAll.sort((a,b) => b.price - a.price);
 
   return {
-    available : true,
-    setId     : mainId || ggId,
-    setUnique : withTotal(sum.setU),
-    ownedUnique:withTotal(sum.ownU),
-    setDoubles: withTotal(sum.ownD),
-    top10     : topAll.slice(0, 10),
+    available: true,
+    setId: baseSetId,
+    setUnique:   withTotal(sum.setU),
+    ownedUnique: withTotal(sum.ownU),
+    setDoubles:  withTotal(sum.ownD),
+    top10: topAll.slice(0, 10),
   };
 }
+
 
 
 
