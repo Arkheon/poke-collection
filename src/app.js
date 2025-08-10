@@ -558,14 +558,10 @@ function initApp(){
         arr.sort(sortCardNumbers);
 
         // ajoute le prix si dispo (lazy par série)
-        // annotateRowsWithPrices(slug, arr);
+         annotateRowsWithPrices(slug, arr);
 
         // Ajoute le prix seulement quand une série précise est sélectionnée
-        const serieSel = document.getElementById('serie');
-        const selectedSlug = serieSel ? serieSel.value : 'all';
-        if (selectedSlug !== 'all') {
-          annotateRowsWithPrices(slug, arr);
-        }
+
 
         html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${title} <span class='hint'>(${arr.length} cartes)</span></h3><div class='grid'>`;
         arr.forEach(r=>{
