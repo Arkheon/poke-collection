@@ -15,6 +15,7 @@ export function mountStatsView({ root, series, loadPrices }) {
     return;
   }
 
+  // ---------- RENDER ----------
   root.innerHTML = series.map(s => `
     <div class="series" data-slug="${s.slug}">
       <div class="s-head" role="button">
@@ -118,29 +119,84 @@ export function mountStatsView({ root, series, loadPrices }) {
     </div>
   `).join('');
 
-  // interactions
-  root.querySelectorAll('.series .s-head').forEach(h=>{
-    h.addEventListener('click', ()=> h.parentElement.classList.toggle('open'));
-  });
+  // ---------- INTERACTIONS ----------
 
-  // manquantes toggles
-  root.querySelectorAll('[data-miss]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const slug = btn.closest('.series').dataset.slug;
-      const g = btn.dataset.miss;
-      btn.parentElement.querySelectorAll('[data-miss]').forEach(x=>x.removeAttribute('aria-pressed'));
-      btn.setAttribute('aria-pressed','true');
-      ['n','r','a'].forEach(k=>{
-        const box = root.querySelector(`#miss-${k}-${slug}`);
-        if (box) box.hidden = (k!==g);
-      });
+  // A) Accordéon : ouvrir une série ferme les autres
+  root.querySelectorAll('.series .s-head').forEach(h=>{
+    h.addEventListener('click', ()=>{
+      const row = h.parentElement;
+      const willOpen = !row.classList.contains('open');
+      root.querySelectorAll('.series.open').forEach(x=>{ if(x!==row) x.classList.remove('open'); });
+      row.classList.toggle('open', willOpen);
     });
   });
 
-  // on first open, fetch prices for that series
+  // B) Onglets "Manquantes" + Actions (copie/export)
+  root.addEventListener('click', async (e) => {
+    // Tabs manquantes
+    const btnMiss = e.target.closest('.card.missing .btn[data-miss]');
+    if (btnMiss) {
+      const row = btnMiss.closest('.series');
+      const slug = row.dataset.slug;
+      btnMiss.parentElement.querySelectorAll('[data-miss]').forEach(x=>x.removeAttribute('aria-pressed'));
+      btnMiss.setAttribute('aria-pressed','true');
+      ['n','r','a'].forEach(k=>{
+        const box = root.querySelector(`#miss-${k}-${slug}`);
+        if (box) box.hidden = (k !== btnMiss.dataset.miss);
+      });
+      return;
+    }
+
+    // Actions (Copier / Exporter) -> utilise l’onglet manquantes actif de la série
+    const btnAction = e.target.closest('.card.actions .btn');
+    if (btnAction) {
+      const row = btnAction.closest('.series');
+      const slug = row.dataset.slug;
+      const active = row.querySelector('.card.missing [data-miss][aria-pressed="true"]') || row.querySelector('.card.missing [data-miss]');
+      const k = active?.dataset.miss || 'a';
+      const listBox = row.querySelector(`#miss-${k}-${slug}`);
+      const list = listBox ? Array.from(listBox.querySelectorAll('.pill')).map(el=>el.textContent.trim()) : [];
+
+      if (/copier/i.test(btnAction.textContent)) {
+        const text = list.join('\n');
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch {
+          // fallback soft
+          const ta=document.createElement('textarea');
+          ta.value=text; document.body.appendChild(ta);
+          ta.select(); document.execCommand('copy'); ta.remove();
+        }
+        const old = btnAction.textContent;
+        btnAction.textContent = 'Copié ✓';
+        setTimeout(()=>btnAction.textContent = old, 1200);
+        return;
+      }
+
+      if (/export/i.test(btnAction.textContent)) {
+        const rows = list.map(line => {
+          const m = line.match(/^([^•]+)•\s*(.*)$/);
+          return { numero:(m?m[1]:line).trim(), nom:(m?m[2]:line).trim(), type:k };
+        });
+        const header = 'Numero;Nom;Type\n';
+        const csv = header + rows.map(r =>
+          `${r.numero.replace(/;/g, ',')};${r.nom.replace(/;/g, ',')};${r.type}`
+        ).join('\n');
+
+        const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `manquantes_${k}.csv`;
+        document.body.appendChild(a); a.click();
+        URL.revokeObjectURL(a.href); a.remove();
+        return;
+      }
+    }
+  });
+
+  // C) Chargement prix au premier dépliage
   root.querySelectorAll('.series').forEach(row=>{
     const slug = row.dataset.slug;
-    const priceBox = row.querySelector('.card.value');
     let loaded = false;
 
     row.querySelector('.s-head').addEventListener('click', async ()=>{
@@ -150,13 +206,12 @@ export function mountStatsView({ root, series, loadPrices }) {
         const res = await loadPrices(slug);
         if (!res || !res.available) return;
 
-        // valeurs
         const SU = res.setUnique, OU = res.ownedUnique, OD = res.setDoubles;
         setTileValues(slug, 'set',  SU);
         setTileValues(slug, 'ownU', OU);
         setTileValues(slug, 'ownD', OD);
 
-        // donut par défaut = set unique
+        // Donut par défaut : set unique
         updateDonut(slug, SU);
         row.querySelectorAll('.tile[data-view]').forEach(t=>{
           t.addEventListener('click', ()=>{
@@ -169,7 +224,7 @@ export function mountStatsView({ root, series, loadPrices }) {
           });
         });
 
-        // top 10
+        // Top 10
         const list = row.querySelector('#top-'+slug);
         if(list){
           const html = res.top10.map(x=>`<span class="pill pill--sm">${x.numero} • ${x.nom} — ${eur(x.price)}</span>`).join('');
@@ -182,7 +237,7 @@ export function mountStatsView({ root, series, loadPrices }) {
   });
 }
 
-// utils
+// ---------- UTILS ----------
 function renderChips(arr){
   if(!arr || !arr.length) return '<span class="muted">—</span>';
   return arr.map(m=>`<span class="pill pill--sm">${m.numero} • ${m.nom}</span>`).join('');
