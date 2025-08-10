@@ -361,83 +361,87 @@
 
     buildRarityDropdown();
 
-    function rebuildSerieCanon() {
-      const map = new Map();
-      CARDS.forEach(r=>{
-        const raw = normalize(r['Série']);
-        if(!raw) return;
-        const sl = slugify(raw);
-        if(!map.has(sl)) map.set(sl, raw);
-      });
-      SEALED.forEach(r=>{
-        const raw = normalize(r['Série']);
-        if(!raw) return;
-        const sl = slugify(raw);
-        if(!map.has(sl)) map.set(sl, raw);
-      });
-      SERIE_CANON = map;
+    // ===================== PRIX : chargement & cache =====================
+    const PRICE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+    let FR_SET_MAP = {};                    // { slug(série FR) -> setId }
+    const PRICE_CACHE = new Map();          // setId -> items (num -> prix)
+
+    function eur(n){ return (n??0).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'; }
+
+    async function loadFrMap(){
+      try{
+        const r = await fetch('data/fr_map.json',{cache:'no-store'});
+        const m = await r.json();
+        const norm={}; Object.entries(m).forEach(([k,v])=>{ norm[slugify(k)] = v; });
+        FR_SET_MAP = norm;
+      }catch(e){ console.warn('fr_map.json introuvable', e); }
     }
-    function refreshSeries(){
-      rebuildSerieCanon();
-      const options = ['all', ...Array.from(SERIE_CANON.keys()).sort((a,b)=>{
-        return SERIE_CANON.get(a).localeCompare(SERIE_CANON.get(b),'fr');
-      })];
-      serie.innerHTML = options.map(sl=>{
-        return `<option value="${sl}">${sl==='all' ? 'Toutes' : SERIE_CANON.get(sl)}</option>`;
-      }).join('');
-      const sSet = new Set(SEALED.map(r=>slugify(r['Série']||'')));
-      const sList = ['all', ...Array.from(sSet).filter(Boolean).sort((a,b)=>{
-        return SERIE_CANON.get(a)?.localeCompare(SERIE_CANON.get(b),'fr');
-      })];
-      if(serieS){
-        serieS.innerHTML = sList.map(sl=>{
-          const label = sl==='all' ? 'Toutes' : (SERIE_CANON.get(sl) || '');
-          return `<option value="${sl}">${label}</option>`;
-        }).join('');
+    loadFrMap(); // charge dès le départ
+
+    function readSetCache(setId){
+      try{
+        const raw = localStorage.getItem('ptcg_prices_'+setId);
+        if(!raw) return null;
+        const o = JSON.parse(raw);
+        if(Date.now() - o.ts > PRICE_TTL_MS) return null;
+        return o.items || null;
+      }catch{ return null; }
+    }
+    function writeSetCache(setId, items){
+      try{ localStorage.setItem('ptcg_prices_'+setId, JSON.stringify({ts:Date.now(), items})); }catch{}
+    }
+
+    async function getSetPrices(setId){
+      if(!setId) return {};
+      if(PRICE_CACHE.has(setId) && PRICE_CACHE.get(setId) !== 'loading') return PRICE_CACHE.get(setId);
+      const cached = readSetCache(setId);
+      if(cached){ PRICE_CACHE.set(setId, cached); return cached; }
+      PRICE_CACHE.set(setId, 'loading');
+      try{
+        const r = await fetch(`public/prices/${setId}.json`, {cache:'no-store'});
+        const j = await r.json();
+        const items = j.items || {};
+        PRICE_CACHE.set(setId, items);
+        writeSetCache(setId, items);
+        return items;
+      }catch(e){
+        console.warn('prix non chargés', setId, e);
+        PRICE_CACHE.delete(setId);
+        return {};
       }
     }
-    function refreshSealedFilters(){
-      if(!(SEALED && SEALED.length)) return;
-      const t=new Set();
-      SEALED.forEach(r=>{ const raw = normalize(r['Type']); if(raw) t.add(raw); });
-      const tOpt=['all',...Array.from(t).sort((a,b)=>a.localeCompare(b,'fr'))];
-      if(typeS) typeS.innerHTML=tOpt.map(v=>`<option value="${v}">${v==='all'?'Tous':v}</option>`).join('');
+
+    function baseNumber(row){
+      const s = String(row['Numéro']||'').trim();
+      let m = s.match(/^(\d+)\s*\/\s*\d+$/); if(m) return m[1];       // 186/198
+      m = s.match(/^[A-Za-z]+0*?(\d{1,3})$/); if(m) return String(parseInt(m[1],10)); // GG05
+      const d = s.replace(/\D/g,''); return d || s;
     }
-    function refreshCompanies(){
-      const s=new Set(GRADED.map(r=>String(r['Société']||'')));
-      const options=['all',...Array.from(s).filter(Boolean).sort((a,b)=>a.localeCompare(b,'fr'))];
-      company.innerHTML=options.map(v=>`<option value="${v}">${v==='all'?'Toutes':v}</option>`).join('');
+    function choosePrice(entry, row){
+      if(!entry) return null;
+      const reverseExists = Number(row['Nb Reverse']) !== -1;
+      const reverseOwned  = Number(row['Nb Reverse']) > 0;
+      if((reverseOwned || reverseExists) && entry.reverseTrend) return entry.reverseTrend;
+      return entry.trend ?? entry.avg30 ?? entry.avg7 ?? entry.low ?? null;
     }
 
-    function ownedQty(r){
-      const keys=["Nb Normal","Nb Ed1","Nb Reverse","Nb Spéciale","Quantité","Qty"]; 
-      return keys.map(k=>{ const n=Number(r[k]); return Number.isNaN(n)?0:Math.max(0,n); }).reduce((a,b)=>a+b,0);
+    // annote les lignes d'une série avec r['Prix'] = "X,XX €"
+    function annotateRowsWithPrices(slug, arr){
+      const setId = FR_SET_MAP[slug]; if(!setId) return;
+      const items = PRICE_CACHE.get(setId);
+      if(items && items !== 'loading'){
+        arr.forEach(r=>{
+          const num = baseNumber(r);
+          const p = choosePrice(items[num], r);
+          if(p!=null) r['Prix'] = eur(Number(p));
+        });
+        return;
+      }
+      if(!PRICE_CACHE.has(setId)){
+        PRICE_CACHE.set(setId,'loading');
+        getSetPrices(setId).then(()=>{ try{ render(); }catch{} });
+      }
     }
-    function sortCardNumbers(a,b){
-      const A=String(a['Numéro']||''); const B=String(b['Numéro']||'');
-      const [mA,sA]=A.split('/').map(x=>parseInt(x,10)); const [mB,sB]=B.split('/').map(x=>parseInt(x,10));
-      if(!Number.isNaN(mA)&&!Number.isNaN(mB)){ if(mA!==mB) return mA-mB; if(!Number.isNaN(sA)&&!Number.isNaN(sB)) return sA-sB; }
-      return A.localeCompare(B,'fr',{numeric:true});
-    }
-
-    const modal=document.getElementById('imgModal');
-    const modalImg=document.getElementById('modalImg');
-    const modalClose=document.getElementById('modalClose');
-    function openModal(src,alt){
-      modalImg.src=src; modalImg.alt=alt||''; modal.classList.add('open');
-      document.body.style.overflow='hidden';
-    }
-    function closeModal(){
-      modal.classList.remove('open'); modalImg.src='';
-      document.body.style.overflow='';
-    }
-    modalClose.addEventListener('click', closeModal);
-    modal.addEventListener('click', (e)=>{ if(e.target===modal) closeModal(); });
-    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeModal(); });
-    document.body.addEventListener('click', (e)=>{
-      const img = e.target.closest('.thumb img');
-      if(img){ openModal(img.src, img.alt); }
-    });
 
     // ======= STATS (avec Alternative + Gradées) =======
     function parseNumDen(numStr){
@@ -523,6 +527,57 @@
       return arr;
     }
 
+    // ===== Valeur / Top 10 par série (utilise les JSON de prix) =====
+    async function computePriceStatsForSeries(slug){
+      const setId = FR_SET_MAP[slug];
+      if(!setId) return {available:false};
+      const items = await getSetPrices(setId);
+      const rows = CARDS.filter(r=>slugify(r['Série'])===slug);
+
+      let valueSet = 0;
+      let valueOwnedUnique = 0;
+      let valueOwnedDupes = 0;
+
+      const topAll = [];
+
+      for(const r of rows){
+        const num = baseNumber(r);
+        const e = items[num];
+        if(!e) continue;
+
+        const normalP  = e.trend ?? e.avg30 ?? e.avg7 ?? e.low ?? 0;
+        const reverseP = e.reverseTrend ?? normalP;
+
+        // Valeur "set complet" = prix normal de chaque carte existante (Nb Normal != -1)
+        if(Number(r['Nb Normal']) !== -1) valueSet += (normalP || 0);
+
+        const qNorm = Math.max(0, Number(r['Nb Normal'])) + Math.max(0, Number(r['Nb Ed1'])) + Math.max(0, Number(r['Nb Spéciale']));
+        const qRev  = Math.max(0, Number(r['Nb Reverse']));
+
+        // Possédé (doublons)
+        valueOwnedDupes += qNorm * (normalP || 0) + qRev * (reverseP || normalP || 0);
+
+        // Possédé (unique) = meilleur prix parmi les versions possédées
+        let candidates = [];
+        if(qNorm > 0) candidates.push(normalP || 0);
+        if(qRev  > 0) candidates.push(reverseP || normalP || 0);
+        if(candidates.length) valueOwnedUnique += Math.max(...candidates);
+
+        // Top par prix (normal)
+        topAll.push({numero:String(r['Numéro']||'—'), nom:String(r['Nom']||''), price: normalP || 0});
+      }
+
+      topAll.sort((a,b)=> b.price - a.price);
+      const top10 = topAll.slice(0,10);
+
+      return {
+        available:true,
+        setId,
+        valueSet, valueOwnedUnique, valueOwnedDupes,
+        top10
+      };
+    }
+
     function renderStats(){
       const root = document.getElementById('stats-root');
       const data = computeStatsPerSeries();
@@ -562,17 +617,130 @@
                 <h4>Manquantes (alternatives) — ${s.missAlt.length}</h4>
                 <div class="chips-list">${chips(s.missAlt)}</div>
               </div>
+
+              <!-- Bloc prix injecté au premier clic -->
+              <div class="missing">
+                <h4>Valeur & Top (Cardmarket)</h4>
+                <div id="price-${s.slug}">
+                  <div class="stat-break">
+                    <div><b>Valeur set complet :</b> <span id="p-set-${s.slug}" class="hint">—</span></div>
+                    <div><b>Possédé (unique) :</b> <span id="p-ownu-${s.slug}" class="hint">—</span></div>
+                    <div><b>Possédé (doublons) :</b> <span id="p-ownd-${s.slug}" class="hint">—</span></div>
+                  </div>
+                  <div class="missing">
+                    <h4>Top 10 (prix normal)</h4>
+                    <div class="chips-list" id="p-top-${s.slug}"><span class="hint">—</span></div>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>`;
       });
       root.innerHTML = html;
 
-      root.onclick = (e)=>{
+      // toggle + calcul prix au premier déploiement
+      root.onclick = async (e)=>{
         const head = e.target.closest('.stat-head');
         if(!head) return;
-        head.parentElement.classList.toggle('open');
+        const row = head.parentElement;
+        row.classList.toggle('open');
+
+        const slug = row.dataset.slug;
+        const block = document.getElementById('price-'+slug);
+        if(block && !block.dataset.ready){
+          block.dataset.ready = '1';
+          const res = await computePriceStatsForSeries(slug);
+          if(!res.available){
+            block.innerHTML = `<span class="hint">Aucun setId mappé pour cette série (voir data/fr_map.json).</span>`;
+            return;
+          }
+          document.getElementById('p-set-'+slug).textContent  = eur(res.valueSet);
+          document.getElementById('p-ownu-'+slug).textContent = eur(res.valueOwnedUnique);
+          document.getElementById('p-ownd-'+slug).textContent = eur(res.valueOwnedDupes);
+          const topBox = document.getElementById('p-top-'+slug);
+          topBox.innerHTML = res.top10.map(x=>`<span>${x.numero} • ${x.nom} — ${eur(x.price)}</span>`).join('') || '<span class="hint">—</span>';
+        }
       };
     }
+
+    function rebuildSerieCanon() {
+      const map = new Map();
+      CARDS.forEach(r=>{
+        const raw = normalize(r['Série']);
+        if(!raw) return;
+        const sl = slugify(raw);
+        if(!map.has(sl)) map.set(sl, raw);
+      });
+      SEALED.forEach(r=>{
+        const raw = normalize(r['Série']);
+        if(!raw) return;
+        const sl = slugify(raw);
+        if(!map.has(sl)) map.set(sl, raw);
+      });
+      SERIE_CANON = map;
+    }
+    function refreshSeries(){
+      rebuildSerieCanon();
+      const options = ['all', ...Array.from(SERIE_CANON.keys()).sort((a,b)=>{
+        return SERIE_CANON.get(a).localeCompare(SERIE_CANON.get(b),'fr');
+      })];
+      serie.innerHTML = options.map(sl=>{
+        return `<option value="${sl}">${sl==='all' ? 'Toutes' : SERIE_CANON.get(sl)}</option>`;
+      }).join('');
+      const sSet = new Set(SEALED.map(r=>slugify(r['Série']||'')));
+      const sList = ['all', ...Array.from(sSet).filter(Boolean).sort((a,b)=>{
+        return SERIE_CANON.get(a)?.localeCompare(SERIE_CANON.get(b),'fr');
+      })];
+      if(serieS){
+        serieS.innerHTML = sList.map(sl=>{
+          const label = sl==='all' ? 'Toutes' : (SERIE_CANON.get(sl) || '');
+          return `<option value="${sl}">${label}</option>`;
+        }).join('');
+      }
+    }
+    function refreshSealedFilters(){
+      if(!(SEALED && SEALED.length)) return;
+      const t=new Set();
+      SEALED.forEach(r=>{ const raw = normalize(r['Type']); if(raw) t.add(raw); });
+      const tOpt=['all',...Array.from(t).sort((a,b)=>a.localeCompare(b,'fr'))];
+      if(typeS) typeS.innerHTML=tOpt.map(v=>`<option value="${v}">${v==='all'?'Tous':v}</option>`).join('');
+    }
+    function refreshCompanies(){
+      const s=new Set(GRADED.map(r=>String(r['Société']||'')));
+      const options=['all',...Array.from(s).filter(Boolean).sort((a,b)=>a.localeCompare(b,'fr'))];
+      company.innerHTML=options.map(v=>`<option value="${v}">${v==='all'?'Toutes':v}</option>`).join('');
+    }
+
+    function ownedQty(r){
+      const keys=["Nb Normal","Nb Ed1","Nb Reverse","Nb Spéciale","Quantité","Qty"]; 
+      return keys.map(k=>{ const n=Number(r[k]); return Number.isNaN(n)?0:Math.max(0,n); }).reduce((a,b)=>a+b,0);
+    }
+    function sortCardNumbers(a,b){
+      const A=String(a['Numéro']||''); const B=String(b['Numéro']||'');
+      const [mA,sA]=A.split('/').map(x=>parseInt(x,10)); const [mB,sB]=B.split('/').map(x=>parseInt(x,10));
+      if(!Number.isNaN(mA)&&!Number.isNaN(mB)){ if(mA!==mB) return mA-mB; if(!Number.isNaN(sA)&&!Number.isNaN(sB)) return sA-sB; }
+      return A.localeCompare(B,'fr',{numeric:true});
+    }
+
+    const modal=document.getElementById('imgModal');
+    const modalImg=document.getElementById('modalImg');
+    const modalClose=document.getElementById('modalClose');
+    function openModal(src,alt){
+      modalImg.src=src; modalImg.alt=alt||''; modal.classList.add('open');
+      document.body.style.overflow='hidden';
+    }
+    function closeModal(){
+      modal.classList.remove('open'); modalImg.src='';
+      document.body.style.overflow='';
+    }
+    modalClose.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e)=>{ if(e.target===modal) closeModal(); });
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeModal(); });
+    document.body.addEventListener('click', (e)=>{
+      const img = e.target.closest('.thumb img');
+      if(img){ openModal(img.src, img.alt); }
+    });
 
     function render(){
       // CARTES
@@ -589,33 +757,22 @@
           rows=rows.filter(r=>['Nom','Numéro','Série'].some(k=>String(r[k]||'').toLowerCase().includes(qq)));
         }
 
-// Vue (possédées / manquantes / toutes)
-const mode = document.getElementById('view').value;
-rows = rows.filter(r => {
-  const n  = Number(r['Nb Normal']);
-  const rv = Number(r['Nb Reverse']);
-  const sp = Number(r['Nb Spéciale']);
-  const alt = Number(r['Alternative']); // 1 = il existe une alternative
-
-  switch (mode) {
-    case 'owned':
-      return (n > 0) || (rv > 0) || (sp > 0) || (Number(r['Nb Ed1']) > 0);
-
-    case 'missing': // manquantes normales qui existent
-      return (n !== -1) && (n <= 0);
-
-    case 'missing_reverse': // manquantes reverse qui existent
-      return (rv !== -1) && (rv <= 0);
-
-    case 'missing_alt': // même logique que Stats
-      return (alt === 1) && (sp <= 0);
-
-    case 'all':
-    default:
-      return true;
-  }
-});
-
+        // Vue (possédées / manquantes / toutes)
+        const mode = document.getElementById('view').value;
+        rows = rows.filter(r => {
+          const n  = Number(r['Nb Normal']);
+          const rv = Number(r['Nb Reverse']);
+          const sp = Number(r['Nb Spéciale']);
+          const alt = Number(r['Alternative']);
+          switch (mode) {
+            case 'owned':           return (n>0) || (rv>0) || (sp>0) || (Number(r['Nb Ed1'])>0);
+            case 'missing':         return (n !== -1) && (n <= 0);
+            case 'missing_reverse': return (rv !== -1) && (rv <= 0);
+            case 'missing_alt':     return (alt === 1) && (sp <= 0);
+            case 'all':
+            default: return true;
+          }
+        });
 
         // Raretés cochées
         rows=rows.filter(r=>{ const {key}=rarityFromRow(r); return !key || selectedRarities.has(key); });
@@ -640,6 +797,10 @@ rows = rows.filter(r => {
         groups.forEach(([slug,arr])=>{
           const title = SERIE_CANON.get(slug) || 'Sans série';
           arr.sort(sortCardNumbers);
+
+          // ==> ajoute le prix si dispo (chargement lazy par série)
+          annotateRowsWithPrices(slug, arr);
+
           html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${title} <span class='hint'>(${arr.length} cartes)</span></h3><div class='grid'>`;
           arr.forEach(r=>{
             const url = r['Image URL'] || r['Image'] || '';
@@ -734,8 +895,57 @@ rows = rows.filter(r => {
       renderStats();
     }
 
+    function rebuildSerieCanon() {
+      const map = new Map();
+      CARDS.forEach(r=>{
+        const raw = normalize(r['Série']);
+        if(!raw) return;
+        const sl = slugify(raw);
+        if(!map.has(sl)) map.set(sl, raw);
+      });
+      SEALED.forEach(r=>{
+        const raw = normalize(r['Série']);
+        if(!raw) return;
+        const sl = slugify(raw);
+        if(!map.has(sl)) map.set(sl, raw);
+      });
+      SERIE_CANON = map;
+    }
+    function refreshSeries(){
+      rebuildSerieCanon();
+      const options = ['all', ...Array.from(SERIE_CANON.keys()).sort((a,b)=>{
+        return SERIE_CANON.get(a).localeCompare(SERIE_CANON.get(b),'fr');
+      })];
+      serie.innerHTML = options.map(sl=>{
+        return `<option value="${sl}">${sl==='all' ? 'Toutes' : SERIE_CANON.get(sl)}</option>`;
+      }).join('');
+      const sSet = new Set(SEALED.map(r=>slugify(r['Série']||'')));
+      const sList = ['all', ...Array.from(sSet).filter(Boolean).sort((a,b)=>{
+        return SERIE_CANON.get(a)?.localeCompare(SERIE_CANON.get(b),'fr');
+      })];
+      if(serieS){
+        serieS.innerHTML = sList.map(sl=>{
+          const label = sl==='all' ? 'Toutes' : (SERIE_CANON.get(sl) || '');
+          return `<option value="${sl}">${label}</option>`;
+        }).join('');
+      }
+    }
+    function refreshSealedFilters(){
+      if(!(SEALED && SEALED.length)) return;
+      const t=new Set();
+      SEALED.forEach(r=>{ const raw = normalize(r['Type']); if(raw) t.add(raw); });
+      const tOpt=['all',...Array.from(t).sort((a,b)=>a.localeCompare(b,'fr'))];
+      if(typeS) typeS.innerHTML=tOpt.map(v=>`<option value="${v}">${v==='all'?'Tous':v}</option>`).join('');
+    }
+    function refreshCompanies(){
+      const s=new Set(GRADED.map(r=>String(r['Société']||'')));
+      const options=['all',...Array.from(s).filter(Boolean).sort((a,b)=>a.localeCompare(b,'fr'))];
+      company.innerHTML=options.map(v=>`<option value="${v}">${v==='all'?'Toutes':v}</option>`).join('');
+    }
+
     function parseFile(file, cb){ Papa.parse(file,{header:true,skipEmptyLines:true,complete:res=>cb(res.data)}); }
   }
 </script>
+
 </body>
 </html>
