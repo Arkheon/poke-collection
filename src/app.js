@@ -283,79 +283,78 @@ function initApp(){
   }
 
 // ===== Valeur / Top 10 par série (clé num OU clé brute, ex: GG05) =====
+// ▼▼ Remplace intégralement ta fonction par celle-ci ▼▼
 async function computePriceStatsForSeries(slug){
-  const setId = FR_SET_MAP[slug];
-  if(!setId) return {available:false};
+  // On garantit que la map FR est chargée
+  await loadFrMap();
+
+  const setId = getSetIdFromSlug(slug);
+  if (!setId) return { available:false };
 
   const items = await getSetPrices(setId);
-  const rows = CARDS.filter(r=>slugify(r['Série'])===slug);
+  const rows  = CARDS.filter(r => slugify(r['Série']) === slug);
 
-  let setU = {normal:0, reverse:0, alt:0};
-  let ownU = {normal:0, reverse:0, alt:0};
-  let ownD = {normal:0, reverse:0, alt:0};
-
+  const sum = {
+    setU : { normal:0, reverse:0, alt:0 },
+    ownU : { normal:0, reverse:0, alt:0 },
+    ownD : { normal:0, reverse:0, alt:0 },
+  };
   const topAll = [];
 
-  for(const r of rows){
-    const rawNum = String(r['Numéro']||'').trim();   // ex. "186/198" ou "GG05"
-    const idxNum = Number(baseNumber(r));            // ex. 186 ou 5
-    // essaie plusieurs clés (certains JSON utilisent "GG05" / d'autres "5")
-    const e = items[idxNum] || items[rawNum] || items[String(idxNum)] || null;
-    if(!e) continue;
+  const pNorm = (e) => Number(e?.trend ?? e?.avg30 ?? e?.avg7 ?? e?.low ?? 0) || 0;
+  const pRev  = (e) => Number(e?.reverseTrend ?? 0) || pNorm(e);
+  const posInt = (v) => {
+    const n = Number(String(v ?? '').replace(',', '.'));
+    return Number.isFinite(n) ? Math.max(0, n) : 0;
+  };
 
-    const hasNormal  = Number(r['Nb Normal']) !== -1;
-    const hasReverse = Number(r['Nb Reverse']) !== -1;
-    const hasAlt     = Number(r['Alternative']) === 1;
+  for (const r of rows){
+    const idx = Number(baseNumber(r));
+    const e   = items[idx];
+    if (!e) continue;
 
-    const normalP  = hasNormal  ? (e.trend ?? e.avg30 ?? e.avg7 ?? e.low ?? 0) : 0;
-    const reverseP = hasReverse ? (e.reverseTrend ?? normalP) : 0;
+    const hasN   = Number(r['Nb Normal']) !== -1;
+    const hasR   = Number(r['Nb Reverse']) !== -1;
+    const hasAlt = Number(r['Alternative']) === 1;
 
-    // Alternative = par défaut même prix que reverse (fallback normal), overridable via window.ALT_PRICE_BY_SET
-    let altP = 0;
-    if (hasAlt) {
-      const override = (window.ALT_PRICE_BY_SET && setId && window.ALT_PRICE_BY_SET[setId]) || null;
-      if(override?.mode === 'normal') altP = normalP;
-      else if(override?.mode === 'multiplier') {
-        const base = (e.reverseTrend ?? normalP);
-        altP = (Number(base)||0) * Number(override.factor||1);
-      } else {
-        altP = (e.reverseTrend ?? normalP) || 0;
-      }
-    }
+    const nPrice = hasN   ? pNorm(e) : 0;
+    const rPrice = hasR   ? pRev(e)  : 0;
+    const aPrice = hasAlt ? (pRev(e) || pNorm(e)) : 0; // Alt = même prix que reverse (fallback normal)
 
-    // Set unique
-    if (hasNormal)  setU.normal += normalP;
-    if (hasReverse) setU.reverse += reverseP;
-    if (hasAlt)     setU.alt    += altP;
+    // Set unique (1 par version existante)
+    if (hasN)   sum.setU.normal  += nPrice;
+    if (hasR)   sum.setU.reverse += rPrice;
+    if (hasAlt) sum.setU.alt     += aPrice;
 
     // Quantités possédées
-    const qNorm = Math.max(0, Number(r['Nb Normal'])) + Math.max(0, Number(r['Nb Ed1']));
-    const qRev  = hasReverse ? Math.max(0, Number(r['Nb Reverse'])) : 0;
-    const qAlt  = hasAlt ? Math.max(0, Number(r['Nb Spéciale'] ?? r['Nb Speciale'] ?? 0)) : 0;
+    const qN = posInt(r['Nb Normal']) + posInt(r['Nb Ed1']);
+    const qR = hasR   ? posInt(r['Nb Reverse']) : 0;
+    const qA = hasAlt ? posInt(r['Nb Spéciale'] ?? r['Nb Speciale']) : 0;
 
-    if(qNorm>0) ownU.normal += normalP;
-    if(qRev >0) ownU.reverse += reverseP;
-    if(qAlt >0) ownU.alt    += altP;
+    // Possédé (unique) : 1 par version possédée
+    if (qN > 0) sum.ownU.normal  += nPrice;
+    if (qR > 0) sum.ownU.reverse += rPrice;
+    if (qA > 0) sum.ownU.alt     += aPrice;
 
-    ownD.normal += qNorm * normalP;
-    ownD.reverse+= qRev  * reverseP;
-    ownD.alt    += qAlt  * altP;
+    // Possédé (doublons) : quantités réelles
+    sum.ownD.normal  += qN * nPrice;
+    sum.ownD.reverse += qR * rPrice;
+    sum.ownD.alt     += qA * aPrice;
 
-    // Top 10 basé sur prix normal
-    topAll.push({numero: rawNum || String(idxNum), nom:String(r['Nom']||''), price: normalP || 0});
+    // Top 10 par prix normal
+    topAll.push({ numero:String(r['Numéro']||'—'), nom:String(r['Nom']||''), price:nPrice });
   }
 
-  const sum = o => o.normal + o.reverse + o.alt;
-  topAll.sort((a,b)=> b.price - a.price);
-  const top10 = topAll.slice(0,10);
+  const withTotal = (o) => ({ ...o, total: o.normal + o.reverse + o.alt });
+  topAll.sort((a,b) => b.price - a.price);
 
   return {
-    available:true,
+    available: true,
     setId,
-    setUnique:  {...setU, total: sum(setU)},
-    ownedUnique:{...ownU, total: sum(ownU)},
-    setDoubles: {...ownD, total: sum(ownD)},
-    top10
+    setUnique:   withTotal(sum.setU),
+    ownedUnique: withTotal(sum.ownU),
+    setDoubles:  withTotal(sum.ownD),
+    top10: topAll.slice(0, 10)
   };
 }
 
