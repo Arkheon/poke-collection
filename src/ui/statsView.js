@@ -4,7 +4,7 @@ import { eur } from '../domain/pricing.js';
 /**
  * Monte la vue Stats dans #stats-root
  * @param {Object} deps
- * @param {HTMLElement} deps.root - conteneur
+ * @param {HTMLElement} deps.root
  * @param {Array} deps.series - retour de computeStatsPerSeries()
  * @param {Function} deps.loadPrices - (slug)=>Promise<priceStats>
  */
@@ -15,84 +15,23 @@ export function mountStatsView({ root, series, loadPrices }) {
     return;
   }
 
+  // 1) Render
   root.innerHTML = series.map(renderSeriesBlock).join('');
 
-  // délégation d'événements unique
-  root.addEventListener('click', async (e) => {
-    // ouvrir/fermer une série
-    const head = e.target.closest('.s-head');
-    if (head && root.contains(head)) {
-      const row = head.closest('.series');
-      // fermer les autres
-      root.querySelectorAll('.series.open').forEach(r => { if (r !== row) r.classList.remove('open'); });
-      // bascule
-      row.classList.toggle('open');
-      head.setAttribute('aria-expanded', row.classList.contains('open') ? 'true' : 'false');
-      if (row.classList.contains('open')) {
-        await ensurePricesLoaded({ row, loadPrices });
-      }
-      return;
-    }
-
-    // filtres manquantes (N/R/A)
-    const missBtn = e.target.closest('[data-miss]');
-    if (missBtn && root.contains(missBtn)) {
-      const row = missBtn.closest('.series');
-      const scope = missBtn.dataset.miss; // 'n'|'r'|'a'
-      // visuel actif
-      missBtn.parentElement.querySelectorAll('[data-miss]').forEach(b => b.removeAttribute('aria-pressed'));
-      missBtn.setAttribute('aria-pressed', 'true');
-      // affiche/masque
-    ['n','r','a'].forEach(k => {
-      const box = row.querySelector(`.chips[data-scope="${k}"]`);
-      if (box) {
-        const show = (k === scope);
-        box.hidden = !show;
-        box.style.display = show ? '' : 'none';
-      }
-    });
-    row.dataset.missScope = scope;
-    return;
-    }
-
-    // actions (copie / csv)
-    const actBtn = e.target.closest('[data-action]');
-    if (actBtn && root.contains(actBtn)) {
-      const row = actBtn.closest('.series');
-      const scope = row.dataset.missScope || 'a';
-      const items = readMissingForScope(row, scope);
-      if (actBtn.dataset.action === 'copy') {
-        await copyToClipboard(items.map(x => `${x.numero} • ${x.nom}`).join('\n'));
-        return;
-      }
-      if (actBtn.dataset.action === 'csv') {
-        const csv = buildCsv(items);
-        downloadBlob(csv, `manquantes_${row.dataset.slug}_${scope}.csv`, 'text/csv;charset=utf-8;');
-        return;
-      }
-    }
-
-    // tuiles valeur -> met à jour le donut
-    const tile = e.target.closest('.tile[data-view]');
-    if (tile && root.contains(tile)) {
-      const row = tile.closest('.series');
-      row.querySelectorAll('.tile[data-view]').forEach(x => x.removeAttribute('aria-current'));
-      tile.setAttribute('aria-current', 'true');
-      const key = tile.dataset.view;
-      updateDonutFor(row, key);
-    }
-  });
+  // 2) Wire events par série (plus robuste que la délégation unique)
+  root.querySelectorAll('.series').forEach(row => wireRow(row, loadPrices));
 }
 
 /* =============== RENDER =============== */
 
 function renderSeriesBlock(s) {
-  // dataset.missScope par défaut = 'a' (Alternatives)
   return `
     <div class="series" data-slug="${s.slug}" data-miss-scope="a">
       <div class="s-head" role="button" aria-expanded="false">
         <div class="s-title">${s.label}</div>
-        <div class="progress" aria-hidden="true"><span style="width:${clamp01(s.completion/100)*100}%"></span></div>
+        <div class="progress" aria-hidden="true">
+          <span style="width:${Math.max(0, Math.min(100, s.completion)).toFixed(2)}%"></span>
+        </div>
         <div class="s-meta">${s.done} / ${s.size} (${s.completion.toFixed(1)}%)</div>
       </div>
       <div class="s-body">
@@ -193,7 +132,61 @@ function renderSeriesBlock(s) {
   `;
 }
 
-/* =============== DATA/APPLY ================= */
+/* =============== WIRING =============== */
+
+function wireRow(row, loadPrices) {
+  // Ouvrir / fermer + chargement prix au premier open
+  const head = row.querySelector('.s-head');
+  if (head) {
+    head.addEventListener('click', async () => {
+      // fermer les autres
+      row.parentElement.querySelectorAll('.series.open').forEach(r => { if (r !== row) r.classList.remove('open'); });
+      // toggle courant
+      const opened = row.classList.toggle('open');
+      head.setAttribute('aria-expanded', opened ? 'true' : 'false');
+      if (opened) await ensurePricesLoaded({ row, loadPrices });
+    });
+  }
+
+  // Filtres manquantes
+  row.querySelectorAll('[data-miss]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const scope = btn.dataset.miss; // 'n'|'r'|'a'
+      row.querySelectorAll('[data-miss]').forEach(x => x.removeAttribute('aria-pressed'));
+      btn.setAttribute('aria-pressed', 'true');
+      ['n', 'r', 'a'].forEach(k => {
+        const box = row.querySelector(`.chips[data-scope="${k}"]`);
+        if (box) box.hidden = (k !== scope);
+      });
+      row.dataset.missScope = scope;
+    });
+  });
+
+  // Actions (copier / csv)
+  row.querySelectorAll('[data-action]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const scope = row.dataset.missScope || 'a';
+      const items = readMissingForScope(row, scope);
+      if (btn.dataset.action === 'copy') {
+        await copyToClipboard(items.map(x => `${x.numero} • ${x.nom}`).join('\n'));
+      } else if (btn.dataset.action === 'csv') {
+        const csv = buildCsv(items);
+        downloadBlob(csv, `manquantes_${row.dataset.slug}_${scope}.csv`, 'text/csv;charset=utf-8;');
+      }
+    });
+  });
+
+  // Tuiles valeurs -> maj donut
+  row.querySelectorAll('.tile[data-view]').forEach(tile => {
+    tile.addEventListener('click', () => {
+      row.querySelectorAll('.tile[data-view]').forEach(x => x.removeAttribute('aria-current'));
+      tile.setAttribute('aria-current', 'true');
+      updateDonutFor(row, tile.dataset.view);
+    });
+  });
+}
+
+/* =============== DATA/APPLY =============== */
 
 function renderChips(arr) {
   if (!arr || !arr.length) return '<span class="muted">—</span>';
@@ -201,8 +194,8 @@ function renderChips(arr) {
 }
 
 function setTileValues(row, key, vals) {
-  const q = (sel) => row.querySelector(`[data-val="${sel}"]`);
-  const F = (n) => eur(n || 0);
+  const q = sel => row.querySelector(`[data-val="${sel}"]`);
+  const F = n => eur(n || 0);
   q(`${key}-total`).textContent = F(vals.total);
   q(`${key}-n`).textContent     = F(vals.normal);
   q(`${key}-r`).textContent     = F(vals.reverse);
@@ -224,7 +217,7 @@ function updateDonut(row, values) {
   segA.setAttribute('stroke-dasharray', `${a} ${100 - a}`);
   segR.setAttribute('stroke-dashoffset', 25 - n);
   segA.setAttribute('stroke-dashoffset', 25 - n - r);
-
+  // mini-légende
   const setTxt = (k, v) => { const el = row.querySelector(`[data-dl="${k}"]`); if (el) el.textContent = `${v.toFixed(0)}%`; };
   setTxt('n', n); setTxt('r', r); setTxt('a', a);
 }
@@ -237,7 +230,8 @@ function updateDonutFor(row, key) {
                : stats.setUnique;
   updateDonut(row, values);
   const label = row.querySelector('[data-donut-label]');
-  if (label) label.textContent = `Répartition — ${key === 'ownU' ? 'Possédé (unique)' : key === 'ownD' ? 'Possédé (doublons)' : 'Set unique'}`;
+  if (label) label.textContent =
+    `Répartition — ${key === 'ownU' ? 'Possédé (unique)' : key === 'ownD' ? 'Possédé (doublons)' : 'Set unique'}`;
 }
 
 async function ensurePricesLoaded({ row, loadPrices }) {
@@ -253,7 +247,7 @@ async function ensurePricesLoaded({ row, loadPrices }) {
       if (top) top.innerHTML = '<span class="muted">Aucun prix disponible pour cette série.</span>';
       return;
     }
-    // garde en mémoire
+    // mémo
     row._priceStats = res;
 
     // valeurs
@@ -282,13 +276,12 @@ async function ensurePricesLoaded({ row, loadPrices }) {
 }
 
 /**
- * Compat : accepte l’ancienne forme ({valueSet, valueOwnedUnique, valueOwnedDupes})
- * et la nouvelle ({setUnique, ownedUnique, setDoubles})
+ * Compat : ancienne forme ({valueSet, valueOwnedUnique, valueOwnedDupes})
+ * -> nouvelle ({setUnique, ownedUnique, setDoubles})
  */
 function normalizePriceStats(res) {
   if (!res) return null;
   if (res.setUnique && res.ownedUnique && res.setDoubles) return res;
-  // ancienne forme -> totaux seulement, segments à 0
   if ('valueSet' in res || 'valueOwnedUnique' in res || 'valueOwnedDupes' in res) {
     return {
       available: true,
@@ -336,9 +329,8 @@ function downloadBlob(text, filename, type) {
 }
 
 async function copyToClipboard(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
+  try { await navigator.clipboard.writeText(text); }
+  catch {
     const ta = document.createElement('textarea');
     ta.value = text;
     document.body.appendChild(ta);
@@ -346,5 +338,3 @@ async function copyToClipboard(text) {
     try { document.execCommand('copy'); } finally { ta.remove(); }
   }
 }
-
-function clamp01(x){ return Math.max(0, Math.min(1, x)); }
