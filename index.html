@@ -142,6 +142,8 @@
           <select id="view">
             <option value="owned">Possédées</option>
             <option value="missing">Manquantes (normales)</option>
+            <option value="missing_reverse">Manquantes (reverse)</option>
+            <option value="missing_special">Manquantes (alternatives)</option>
             <option value="all">Toutes</option>
           </select>
         </div>
@@ -334,16 +336,7 @@
         refreshSeries(); refreshSealedFilters(); refreshCompanies(); render();
       });
     }
-
-    // ---- helpers de lecture robuste des colonnes
-    const pick = (row, names, def='')=>{
-      for(const n of names){ if(n in row) return row[n]; }
-      return def;
-    };
-    const num = v => {
-      const n = Number(String(v??'').replace(',', '.').trim());
-      return Number.isFinite(n) ? n : NaN;
-    };
+    function parseFile(file, cb){ Papa.parse(file,{header:true,skipEmptyLines:true,complete:res=>cb(res.data)}); }
 
     const q=document.getElementById('q');
     const serie=document.getElementById('serie');
@@ -445,24 +438,36 @@
       if(img){ openModal(img.src, img.alt); }
     });
 
-    // ======= STATS (taille basée sur le comptage réel + Alternatives + Gradées) =======
+    // ======= STATS (avec Alternative + Gradées) =======
+    function parseNumDen(numStr){
+      const s = String(numStr||'').trim();
+      const m = s.match(/^(\d+)\s*\/\s*(\d+)$/i);
+      if(!m) return null;
+      return {num:parseInt(m[1],10), den:parseInt(m[2],10)};
+    }
+    function parseSubset(numStr){
+      const s = String(numStr||'').trim();
+      const m = s.match(/^([A-Za-z]+)\s*0*?(\d{1,3})$/i);
+      if(!m) return null;
+      return {prefix:m[1].toUpperCase(), n:parseInt(m[2],10)};
+    }
+
     function computeStatsPerSeries(){
       const map = new Map();
-
       CARDS.forEach(r=>{
-        const slug = slugify(pick(r, ['Série'])); if(!slug) return;
+        const slug = slugify(r['Série']); if(!slug) return;
 
-        const nbN = num(pick(r, ['Nb Normal','NB Normal','Nb normal'], 0));
-        const nbR = num(pick(r, ['Nb Reverse','NB Reverse','Nb reverse'], 0));
-        const nbS = num(pick(r, ['Nb Spéciale','NB Spécial','NB spécial','Nb Special','Nb spécial'], 0)); // utilisé pour "possédé" si Alternative=1
-        const alt = num(pick(r, ['Alternative'], -1));  // -1 pas d’alternative, 1 = existe
-        const grad = num(pick(r, ['Gradées','Gradés','Gradees','Grades'], 0)); // 2=PCA, 4=PSA
+        const nbN = Number(r['Nb Normal']);
+        const nbR = Number(r['Nb Reverse']);
+        const nbS = Number(r['Nb Spéciale']);      // nb d’alternatives possédées
+        const alt = Number(r['Alternative'] ?? -1); // -1 pas d’alternative, 1 = existe
+        const grad = Number(r['Gradées'] ?? 0);     // 2=PCA, 4=PSA
 
         if(!map.has(slug)){
           map.set(slug, {
             slug,
-            label: SERIE_CANON.get(slug) || normalize(pick(r, ['Série'])),
-            // tailles (on compte les cartes normales/reprints existantes)
+            label: SERIE_CANON.get(slug) || normalize(r['Série']),
+            // comptages de taille (basés sur le nombre réel de cartes normales + sous-ensembles)
             sizeN: 0,
             sizeSub: 0,
             // totaux par version
@@ -478,38 +483,39 @@
         }
         const o = map.get(slug);
 
-        const numStr = String(pick(r, ['Numéro'])||'').trim();
-        const isNumDen = /^\d+\s*\/\s*\d+$/i.test(numStr);          // 123/190
-        const isSubset = /^[A-Za-z]+\s*0*?\d{1,3}$/i.test(numStr);   // GG05, TG30…
+        // Déterminer si c’est une carte normale (x/y) ou un sous-ensemble (GGxx, TGxx…)
+        const numStr = String(r['Numéro']||'').trim();
+        const isNumDen = /^\d+\s*\/\s*\d+$/i.test(numStr);
+        const isSubset = /^[A-Za-z]+\s*0*?\d{1,3}$/i.test(numStr);
 
-        // Taille du set basée sur les cartes normales existantes
-        if (!Number.isNaN(nbN) && nbN !== -1) {
+        // ---- Taille : on compte les cartes qui existent (Nb Normal != -1)
+        if (nbN !== -1) {
           if (isNumDen) o.sizeN += 1;
           else if (isSubset) o.sizeSub += 1;
         }
 
-        // Normales
-        if (!Number.isNaN(nbN) && nbN !== -1) {
+        // ---- Normales
+        if (nbN !== -1) {
           o.totN += 1;
           if (nbN > 0) o.ownedN += 1;
-          else o.missN.push({numero: numStr || '—', nom: String(pick(r, ['Nom'])||'')});
+          else o.missN.push({numero: numStr || '—', nom: String(r['Nom']||'')});
         }
 
-        // Reverse
-        if (!Number.isNaN(nbR) && nbR !== -1) {
+        // ---- Reverse
+        if (nbR !== -1) {
           o.totR += 1;
           if (nbR > 0) o.ownedR += 1;
-          else o.missR.push({numero: numStr || '—', nom: String(pick(r, ['Nom'])||'')});
+          else o.missR.push({numero: numStr || '—', nom: String(r['Nom']||'')});
         }
 
-        // Alternatives : existent seulement si Alternative == 1
+        // ---- Alternatives (nouvelle logique)
         if (alt === 1) {
           o.totAlt += 1;
           if (nbS > 0) o.ownedAlt += 1;
-          else o.missAlt.push({numero: numStr || '—', nom: String(pick(r, ['Nom'])||'')});
+          else o.missAlt.push({numero: numStr || '—', nom: String(r['Nom']||'')});
         }
 
-        // Gradées (compteur simple + breakdown PCA/PSA)
+        // ---- Gradées
         if (grad === 2 || grad === 4) {
           o.gradedTotal += 1;
           if (grad === 2) o.gradedPCA += 1;
@@ -518,8 +524,8 @@
       });
 
       const arr = Array.from(map.values()).map(o=>{
-        const sizeTotal = o.sizeN + o.sizeSub;      // taille réelle du set
-        const done = Math.min(o.ownedN, sizeTotal); // sécurité
+        const sizeTotal = o.sizeN + o.sizeSub;      // -> “taille du set” réelle
+        const done = Math.min(o.ownedN, sizeTotal); // sécurité anti-dépassement
         const pct = sizeTotal ? (done / sizeTotal) * 100 : 0;
         return {...o, size: sizeTotal, done, completion: pct};
       });
@@ -531,11 +537,7 @@
     function renderStats(){
       const root = document.getElementById('stats-root');
       const data = computeStatsPerSeries();
-      if(!data.length){
-        root.innerHTML = `<div class="empty">Pas de données cartes chargées.</div>`;
-        root.onclick=null;
-        return;
-      }
+      if(!data.length){ root.innerHTML = `<div class="empty">Pas de données cartes chargées.</div>`; root.onclick=null; return; }
 
       let html = '';
       const chips = (arr)=> arr.map(m=>`<span>${m.numero} • ${m.nom}</span>`).join('') || '<span class="hint">—</span>';
@@ -598,15 +600,33 @@
           rows=rows.filter(r=>['Nom','Numéro','Série'].some(k=>String(r[k]||'').toLowerCase().includes(qq)));
         }
 
+        // Vue (possédées / manquantes / variantes)
         const mode = document.getElementById('view').value;
-        if(mode==='owned'){
-          rows = rows.filter(r => (Number(r['Nb Normal'])>0) || (Number(r['Nb Reverse'])>0) || (Number(r['Nb Spéciale'])>0) || (Number(r['Nb Ed1'])>0));
-        }else if(mode==='missing'){
-          rows = rows.filter(r => (Number(r['Nb Normal'])<=0));
+        if (mode === 'owned') {
+          rows = rows.filter(r =>
+            (Number(r['Nb Normal']) > 0) ||
+            (Number(r['Nb Reverse']) > 0) ||
+            (Number(r['Nb Spéciale']) > 0) ||
+            (Number(r['Nb Ed1']) > 0)
+          );
+        } else if (mode === 'missing') {
+          rows = rows.filter(r => (Number(r['Nb Normal']) <= 0));
+        } else if (mode === 'missing_reverse') {
+          rows = rows.filter(r => {
+            const n = Number(r['Nb Reverse']);
+            return n !== -1 && n <= 0;
+          });
+        } else if (mode === 'missing_special') {
+          rows = rows.filter(r => {
+            const n = Number(r['Nb Spéciale']);
+            return n !== -1 && n <= 0;
+          });
         }
 
+        // Raretés cochées
         rows=rows.filter(r=>{ const {key}=rarityFromRow(r); return !key || selectedRarities.has(key); });
 
+        // Groupes par série
         const groupsMap = new Map();
         rows.forEach(r=>{
           const sl = slugify(r['Série']);
@@ -621,7 +641,7 @@
 
         let html='';
         const rarityHtml=(r)=>{ const {key,label,raw}=rarityFromRow(r); return key? `${rarityIconsByKey(key)} <span class='rarity-label'>${label}</span>`: `<span class='rarity-label'>Rareté: ${raw||'—'}</span>`; };
-        const badges=(r)=>{ const n=Number(r['Nb Normal'])>0, rv=Number(r['Nb Reverse'])>0, sp=Number(r['Nb Spéciale'])>0; return `<span class='badges'>${n?`<span class='ball red' title='Normale'></span>`:''}${rv?`<span class='ball yellow' title='Reverse'></span>`:''}${sp?`<span class='ball blue' title='Spéciale'></span>`:''}</span>`; };
+        const badges=(r)=>{ const n=Number(r['Nb Normal'])>0, rv=Number(r['Nb Reverse'])>0, sp=Number(r['Nb Spéciale'])>0; return `<span class='badges'>${n?`<span class='ball red' title='Normale'></span>`:''}${rv?`<span class='ball yellow' title='Reverse'></span>`:''}${sp?`<span class='ball blue' title='Alternative'></span>`:''}</span>`; };
 
         groups.forEach(([slug,arr])=>{
           const title = SERIE_CANON.get(slug) || 'Sans série';
