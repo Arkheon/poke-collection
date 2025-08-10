@@ -1,9 +1,7 @@
-// src/services/priceService.js
-
+// services/priceService.js
 const PRICE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const PRICE_CACHE = new Map(); // setId -> items | 'loading'
 
-// ---- localStorage cache ----
 function readSetCache(setId) {
   try {
     const raw = localStorage.getItem('ptcg_prices_' + setId);
@@ -13,51 +11,46 @@ function readSetCache(setId) {
     return o.items || null;
   } catch { return null; }
 }
-
 function writeSetCache(setId, items) {
   try {
     localStorage.setItem('ptcg_prices_' + setId, JSON.stringify({ ts: Date.now(), items }));
   } catch {}
 }
 
-// ---- fetch helpers (chemins fallback) ----
-function getUrlCandidates(setId){
+function candidatePaths(setId){
+  // essaie d’abord sans "public/", puis avec — compatible GH Pages & dev local
   return [
     `prices/${setId}.json`,
     `./prices/${setId}.json`,
     `public/prices/${setId}.json`,
-    `/public/prices/${setId}.json`,
+    `./public/prices/${setId}.json`,
   ];
 }
 
-async function fetchWithFallback(setId){
-  const urls = getUrlCandidates(setId);
-  let lastErr = null;
-  for (const url of urls){
-    try {
+async function fetchFirstOk(setId){
+  for(const url of candidatePaths(setId)){
+    try{
       const r = await fetch(url, { cache: 'no-store' });
-      if (!r.ok) { lastErr = new Error(`${r.status} ${r.statusText}`); continue; }
-      return await r.json();
-    } catch (e) {
-      lastErr = e;
-    }
+      if(r.ok){
+        const ct = r.headers.get('content-type') || '';
+        if (ct.includes('application/json')) return await r.json();
+      }
+    }catch(_){}
   }
-  throw lastErr || new Error('No price source reachable');
+  throw new Error(`prices for ${setId} not found in known paths`);
 }
 
-// ---- public API ----
 export async function getSetPrices(setId) {
   if (!setId) return {};
-  const inMem = PRICE_CACHE.get(setId);
-  if (inMem && inMem !== 'loading') return inMem;
+  if (PRICE_CACHE.has(setId) && PRICE_CACHE.get(setId) !== 'loading') return PRICE_CACHE.get(setId);
 
   const cached = readSetCache(setId);
   if (cached) { PRICE_CACHE.set(setId, cached); return cached; }
 
   PRICE_CACHE.set(setId, 'loading');
   try {
-    const j = await fetchWithFallback(setId);
-    const items = (j && j.items) || {};
+    const j = await fetchFirstOk(setId);
+    const items = j.items || {};
     PRICE_CACHE.set(setId, items);
     writeSetCache(setId, items);
     return items;
