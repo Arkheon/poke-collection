@@ -414,9 +414,38 @@
     function baseNumber(row){
       const s = String(row['Numéro']||'').trim();
       let m = s.match(/^(\d+)\s*\/\s*\d+$/); if(m) return m[1];       // 186/198
-      m = s.match(/^[A-Za-z]+0*?(\d{1,3})$/); if(m) return String(parseInt(m[1],10)); // GG05
+      m = s.match(/^[A-Za-z]+0*?(\d{1,3})$/); if(m) return String(parseInt(m[1],10)); // GG05 -> 5
       const d = s.replace(/\D/g,''); return d || s;
     }
+
+    // --- prix par variante (avec fallback reverse -> normal) ---
+    function priceFromEntry(entry, variant){
+      if(!entry) return 0;
+      const base = Number(entry.trend ?? entry.avg30 ?? entry.avg7 ?? entry.low ?? 0) || 0;
+      if(variant === 'reverse'){
+        const rr = Number(entry.reverseTrend ?? 0);
+        return rr > 0 ? rr : base;
+      }
+      return base;
+    }
+    // Personnalisation possible : window.ALT_PRICE_BY_SET = { sv7:{mode:'reverse'}, sv3pt5:{mode:'multiplier',factor:2} }
+    function altPriceFromEntry(entry, setId){
+      // défaut = même prix que reverse (repli normal)
+      let val = priceFromEntry(entry,'reverse');
+      const ov = (window.ALT_PRICE_BY_SET && setId && window.ALT_PRICE_BY_SET[setId]) || null;
+      if(ov){
+        if(ov.mode === 'normal') val = priceFromEntry(entry,'normal');
+        if(ov.mode === 'multiplier'){
+          const base = priceFromEntry(entry,'reverse') || priceFromEntry(entry,'normal');
+          const f = Number(ov.factor||1);
+          val = base * f;
+        }
+      }
+      return val;
+    }
+    function posInt(v){ const n = Number(String(v??'').replace(',','.')); return Number.isFinite(n) ? Math.max(0,n) : 0; }
+
+    // annote les lignes d'une série avec r['Prix'] (affichage liste cartes)
     function choosePrice(entry, row){
       if(!entry) return null;
       const reverseExists = Number(row['Nb Reverse']) !== -1;
@@ -424,8 +453,6 @@
       if((reverseOwned || reverseExists) && entry.reverseTrend) return entry.reverseTrend;
       return entry.trend ?? entry.avg30 ?? entry.avg7 ?? entry.low ?? null;
     }
-
-    // annote les lignes d'une série avec r['Prix'] = "X,XX €"
     function annotateRowsWithPrices(slug, arr){
       const setId = FR_SET_MAP[slug]; if(!setId) return;
       const items = PRICE_CACHE.get(setId);
@@ -527,45 +554,56 @@
       return arr;
     }
 
-    // ===== Valeur / Top 10 par série (utilise les JSON de prix) =====
+    // ===== Valeur / Top 10 par série (nouvelle logique N/R/Alt) =====
     async function computePriceStatsForSeries(slug){
       const setId = FR_SET_MAP[slug];
       if(!setId) return {available:false};
       const items = await getSetPrices(setId);
       const rows = CARDS.filter(r=>slugify(r['Série'])===slug);
 
-      let valueSet = 0;
-      let valueOwnedUnique = 0;
-      let valueOwnedDupes = 0;
+      let setU = {normal:0, reverse:0, alt:0};
+      let ownU = {normal:0, reverse:0, alt:0};
+      let ownD = {normal:0, reverse:0, alt:0};
 
       const topAll = [];
 
       for(const r of rows){
-        const num = baseNumber(r);
-        const e = items[num];
+        const idx = Number(baseNumber(r));
+        const e = items[idx];
         if(!e) continue;
 
-        const normalP  = e.trend ?? e.avg30 ?? e.avg7 ?? e.low ?? 0;
-        const reverseP = e.reverseTrend ?? normalP;
+        const hasNormal  = Number(r['Nb Normal']) !== -1;      // la carte existe en normal (inclut secrètes)
+        const hasReverse = Number(r['Nb Reverse']) !== -1;
+        const hasAlt     = Number(r['Alternative']) === 1;
 
-        // Valeur "set complet" = prix normal de chaque carte existante (Nb Normal != -1)
-        if(Number(r['Nb Normal']) !== -1) valueSet += (normalP || 0);
+        const pNorm = hasNormal  ? priceFromEntry(e, 'normal')  : 0;
+        const pRev  = hasReverse ? priceFromEntry(e, 'reverse') : 0;
+        const pAlt  = hasAlt     ? altPriceFromEntry(e, setId)  : 0;
 
-        const qNorm = Math.max(0, Number(r['Nb Normal'])) + Math.max(0, Number(r['Nb Ed1'])) + Math.max(0, Number(r['Nb Spéciale']));
-        const qRev  = Math.max(0, Number(r['Nb Reverse']));
+        // --- Set (unique complet) : 1 de chaque version qui existe ---
+        if(hasNormal)  setU.normal += pNorm;
+        if(hasReverse) setU.reverse += pRev;
+        if(hasAlt)     setU.alt    += pAlt;
 
-        // Possédé (doublons)
-        valueOwnedDupes += qNorm * (normalP || 0) + qRev * (reverseP || normalP || 0);
+        // --- Possédé (unique) : 1 par version possédée ---
+        const qNorm = posInt(r['Nb Normal']) + posInt(r['Nb Ed1']);
+        const qRev  = hasReverse ? posInt(r['Nb Reverse']) : 0;
+        const qAlt  = hasAlt ? posInt(r['Nb Spéciale'] ?? r['Nb Speciale'] ?? 0) : 0;
 
-        // Possédé (unique) = meilleur prix parmi les versions possédées
-        let candidates = [];
-        if(qNorm > 0) candidates.push(normalP || 0);
-        if(qRev  > 0) candidates.push(reverseP || normalP || 0);
-        if(candidates.length) valueOwnedUnique += Math.max(...candidates);
+        if(qNorm>0) ownU.normal += pNorm;
+        if(qRev >0) ownU.reverse += pRev;
+        if(qAlt >0) ownU.alt    += pAlt;
 
-        // Top par prix (normal)
-        topAll.push({numero:String(r['Numéro']||'—'), nom:String(r['Nom']||''), price: normalP || 0});
+        // --- Possédé (doublons) : quantités réelles ---
+        ownD.normal += qNorm * pNorm;
+        ownD.reverse+= qRev  * pRev;
+        ownD.alt    += qAlt  * pAlt;
+
+        // Top 10 par prix normal (info)
+        topAll.push({numero:String(r['Numéro']||'—'), nom:String(r['Nom']||''), price: pNorm});
       }
+
+      const sum = o => o.normal + o.reverse + o.alt;
 
       topAll.sort((a,b)=> b.price - a.price);
       const top10 = topAll.slice(0,10);
@@ -573,7 +611,9 @@
       return {
         available:true,
         setId,
-        valueSet, valueOwnedUnique, valueOwnedDupes,
+        setUnique:  {...setU, total: sum(setU)},
+        ownedUnique:{...ownU, total: sum(ownU)},
+        setDoubles: {...ownD, total: sum(ownD)},
         top10
       };
     }
@@ -618,14 +658,22 @@
                 <div class="chips-list">${chips(s.missAlt)}</div>
               </div>
 
-              <!-- Bloc prix injecté au premier clic -->
               <div class="missing">
                 <h4>Valeur & Top (Cardmarket)</h4>
                 <div id="price-${s.slug}">
                   <div class="stat-break">
-                    <div><b>Valeur set complet :</b> <span id="p-set-${s.slug}" class="hint">—</span></div>
-                    <div><b>Possédé (unique) :</b> <span id="p-ownu-${s.slug}" class="hint">—</span></div>
-                    <div><b>Possédé (doublons) :</b> <span id="p-ownd-${s.slug}" class="hint">—</span></div>
+                    <div>
+                      <b>Valeur set complet :</b> <span id="p-set-${s.slug}" class="hint">—</span>
+                      <div class="hint">N: <span id="p-setN-${s.slug}">—</span> · R: <span id="p-setR-${s.slug}">—</span> · Alt: <span id="p-setA-${s.slug}">—</span></div>
+                    </div>
+                    <div>
+                      <b>Possédé (unique) :</b> <span id="p-ownu-${s.slug}" class="hint">—</span>
+                      <div class="hint">N: <span id="p-ownuN-${s.slug}">—</span> · R: <span id="p-ownuR-${s.slug}">—</span> · Alt: <span id="p-ownuA-${s.slug}">—</span></div>
+                    </div>
+                    <div>
+                      <b>Possédé (doublons) :</b> <span id="p-ownd-${s.slug}" class="hint">—</span>
+                      <div class="hint">N: <span id="p-owndN-${s.slug}">—</span> · R: <span id="p-owndR-${s.slug}">—</span> · Alt: <span id="p-owndA-${s.slug}">—</span></div>
+                    </div>
                   </div>
                   <div class="missing">
                     <h4>Top 10 (prix normal)</h4>
@@ -655,9 +703,23 @@
             block.innerHTML = `<span class="hint">Aucun setId mappé pour cette série (voir data/fr_map.json).</span>`;
             return;
           }
-          document.getElementById('p-set-'+slug).textContent  = eur(res.valueSet);
-          document.getElementById('p-ownu-'+slug).textContent = eur(res.valueOwnedUnique);
-          document.getElementById('p-ownd-'+slug).textContent = eur(res.valueOwnedDupes);
+          const SU = res.setUnique, OU = res.ownedUnique, OD = res.setDoubles;
+          document.getElementById('p-set-'+slug).textContent   = eur(SU.total);
+          document.getElementById('p-ownu-'+slug).textContent  = eur(OU.total);
+          document.getElementById('p-ownd-'+slug).textContent  = eur(OD.total);
+
+          document.getElementById('p-setN-'+slug).textContent  = eur(SU.normal);
+          document.getElementById('p-setR-'+slug).textContent  = eur(SU.reverse);
+          document.getElementById('p-setA-'+slug).textContent  = eur(SU.alt);
+
+          document.getElementById('p-ownuN-'+slug).textContent = eur(OU.normal);
+          document.getElementById('p-ownuR-'+slug).textContent = eur(OU.reverse);
+          document.getElementById('p-ownuA-'+slug).textContent = eur(OU.alt);
+
+          document.getElementById('p-owndN-'+slug).textContent = eur(OD.normal);
+          document.getElementById('p-owndR-'+slug).textContent = eur(OD.reverse);
+          document.getElementById('p-owndA-'+slug).textContent = eur(OD.alt);
+
           const topBox = document.getElementById('p-top-'+slug);
           topBox.innerHTML = res.top10.map(x=>`<span>${x.numero} • ${x.nom} — ${eur(x.price)}</span>`).join('') || '<span class="hint">—</span>';
         }
