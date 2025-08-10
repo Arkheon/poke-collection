@@ -4,6 +4,8 @@ import { baseNumber, parseNumDen, parseSubset } from './domain/numbers.js';
 import { eur, choosePrice } from './domain/pricing.js';
 import { loadFrMap, getSetIdFromSlug } from './services/frMap.js';
 import { getSetPrices, peekPriceCache } from './services/priceService.js';
+import { mountStatsView } from './ui/statsView.js';
+
 
 export function boot() {
   if (document.readyState === 'loading') {
@@ -343,113 +345,21 @@ function initApp(){
     };
   }
 
-  function renderStats(){
-    const root = document.getElementById('stats-root');
-    const data = computeStatsPerSeries();
-    if(!data.length){ root.innerHTML = `<div class="empty">Pas de données cartes chargées.</div>`; root.onclick=null; return; }
-
-    let html = '';
-    const chips = (arr)=> arr.map(m=>`<span>${m.numero} • ${m.nom}</span>`).join('') || '<span class="hint">—</span>';
-
-    data.forEach(s=>{
-      const pct = Math.max(0, Math.min(100, s.completion));
-      html += `
-        <div class="stat-row" data-slug="${s.slug}">
-          <div class="stat-head">
-            <div class="stat-title">${s.label}</div>
-            <div class="progress" aria-hidden="true"><span style="width:${pct.toFixed(2)}%"></span></div>
-            <div class="stat-meta">${s.done} / ${s.size} (${pct.toFixed(1)}%)</div>
-          </div>
-          <div class="stat-body">
-            <div class="stat-break">
-              <div><b>Normales :</b> ${s.ownedN} / ${s.totN}</div>
-              <div><b>Reverse :</b> ${s.ownedR} / ${s.totR}</div>
-              <div><b>Alternatives :</b> ${s.ownedAlt} / ${s.totAlt}</div>
-              <div><b>Gradées :</b> ${s.gradedTotal} <span class="hint">(PCA: ${s.gradedPCA}, PSA: ${s.gradedPSA})</span></div>
-            </div>
-
-            <div class="missing">
-              <h4>Manquantes (normales) — ${s.missN.length}</h4>
-              <div class="chips-list">${chips(s.missN)}</div>
-            </div>
-
-            <div class="missing">
-              <h4>Manquantes (reverse) — ${s.missR.length}</h4>
-              <div class="chips-list">${chips(s.missR)}</div>
-            </div>
-
-            <div class="missing">
-              <h4>Manquantes (alternatives) — ${s.missAlt.length}</h4>
-              <div class="chips-list">${chips(s.missAlt)}</div>
-            </div>
-
-            <div class="missing">
-              <h4>Valeur & Top (Cardmarket)</h4>
-              <div id="price-${s.slug}">
-                <div class="stat-break">
-                  <div>
-                    <b>Valeur set complet :</b> <span id="p-set-${s.slug}" class="hint">—</span>
-                    <div class="hint">N: <span id="p-setN-${s.slug}">—</span> · R: <span id="p-setR-${s.slug}">—</span> · Alt: <span id="p-setA-${s.slug}">—</span></div>
-                  </div>
-                  <div>
-                    <b>Possédé (unique) :</b> <span id="p-ownu-${s.slug}" class="hint">—</span>
-                    <div class="hint">N: <span id="p-ownuN-${s.slug}">—</span> · R: <span id="p-ownuR-${s.slug}">—</span> · Alt: <span id="p-ownuA-${s.slug}">—</span></div>
-                  </div>
-                  <div>
-                    <b>Possédé (doublons) :</b> <span id="p-ownd-${s.slug}" class="hint">—</span>
-                    <div class="hint">N: <span id="p-owndN-${s.slug}">—</span> · R: <span id="p-owndR-${s.slug}">—</span> · Alt: <span id="p-owndA-${s.slug}">—</span></div>
-                  </div>
-                </div>
-                <div class="missing">
-                  <h4>Top 10 (prix normal)</h4>
-                  <div class="chips-list" id="p-top-${s.slug}"><span class="hint">—</span></div>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>`;
+function renderStats(){
+  const root = document.getElementById('stats-root');
+  const data = computeStatsPerSeries();
+  try{
+    mountStatsView({
+      root,
+      series: data,
+      loadPrices: computePriceStatsForSeries, // fonction déjà présente dans app.js
     });
-    root.innerHTML = html;
-
-    // Calcul prix au premier clic d'ouverture
-    root.onclick = async (e)=>{
-      const head = e.target.closest('.stat-head');
-      if(!head) return;
-      const row = head.parentElement;
-      row.classList.toggle('open');
-
-      const slug = row.dataset.slug;
-      const block = document.getElementById('price-'+slug);
-      if(block && !block.dataset.ready){
-        block.dataset.ready = '1';
-        const res = await computePriceStatsForSeries(slug);
-        if(!res.available){
-          block.innerHTML = `<span class="hint">Aucun setId mappé pour cette série (voir data/fr_map.json).</span>`;
-          return;
-        }
-        const SU = res.setUnique, OU = res.ownedUnique, OD = res.setDoubles;
-        document.getElementById('p-set-'+slug).textContent   = eur(SU.total);
-        document.getElementById('p-ownu-'+slug).textContent  = eur(OU.total);
-        document.getElementById('p-ownd-'+slug).textContent  = eur(OD.total);
-
-        document.getElementById('p-setN-'+slug).textContent  = eur(SU.normal);
-        document.getElementById('p-setR-'+slug).textContent  = eur(SU.reverse);
-        document.getElementById('p-setA-'+slug).textContent  = eur(SU.alt);
-
-        document.getElementById('p-ownuN-'+slug).textContent = eur(OU.normal);
-        document.getElementById('p-ownuR-'+slug).textContent = eur(OU.reverse);
-        document.getElementById('p-ownuA-'+slug).textContent = eur(OU.alt);
-
-        document.getElementById('p-owndN-'+slug).textContent = eur(OD.normal);
-        document.getElementById('p-owndR-'+slug).textContent = eur(OD.reverse);
-        document.getElementById('p-owndA-'+slug).textContent = eur(OD.alt);
-
-        const topBox = document.getElementById('p-top-'+slug);
-        topBox.innerHTML = res.top10.map(x=>`<span>${x.numero} • ${x.nom} — ${eur(x.price)}</span>`).join('') || '<span class="hint">—</span>';
-      }
-    };
+  }catch(err){
+    console.error('renderStats failed', err);
+    if(root) root.innerHTML = `<div class="empty">Erreur d’affichage des stats.</div>`;
   }
+}
+
 
   // ===== Helpers UI =====
   function rebuildSerieCanon() {
