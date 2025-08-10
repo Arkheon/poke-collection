@@ -110,7 +110,7 @@ function initApp(){
   function loadCsvFromUrl(url, cb, onError){
     fetch(url,{cache:'no-store'})
       .then(r=>{ if(!r.ok) throw new Error(r.status+" "+r.statusText); return r.text(); })
-      .then(text=> Papa.parse(text,{header:true,skipEmptyLines:true,complete:res=>cb(res.data)}))
+      .then(text=> Papa.parse(text,{header:true,skipEmptyLines:true,worker:true,complete:res=>cb(res.data)})
       .catch(err=>{ console.warn('CSV auto-load failed for', url, err); onError && onError(err); });
   }
   loadCsvFromUrl(AUTO_SOURCES.cards, rows=>{ CARDS=normalizeRows(rows); refreshSeries(); render(); });
@@ -202,7 +202,7 @@ function annotateRowsWithPrices(slug, arr){
       if(p>0) r['Prix'] = eur(p);
     });
 
-    try { render(); } catch {}
+    scheduleRender();
   }).catch(()=>{ /* silence */ });
 }
 
@@ -511,6 +511,16 @@ function renderStats(){
     if(img){ openModal(img.src, img.alt); }
   });
 
+let RENDER_SCHEDULED = false;
+function scheduleRender(){
+  if (RENDER_SCHEDULED) return;
+  RENDER_SCHEDULED = true;
+  requestAnimationFrame(() => {
+    RENDER_SCHEDULED = false;
+    try { render(); } catch {}
+  });
+}
+  
   // ===== RENDER =====
   function render(){
     // CARTES
@@ -570,8 +580,12 @@ function renderStats(){
         const title = SERIE_CANON.get(slug) || 'Sans série';
         arr.sort(sortCardNumbers);
 
-        // ajoute le prix si dispo (lazy par série)
-        annotateRowsWithPrices(slug, arr);
+        // Enrichit les prix seulement si une série précise est sélectionnée
+        const serieSel = document.getElementById('serie');
+        const selectedSlug = serieSel ? serieSel.value : 'all';
+        if (selectedSlug !== 'all') {
+          annotateRowsWithPrices(slug, arr);
+        }
 
         html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${title} <span class='hint'>(${arr.length} cartes)</span></h3><div class='grid'>`;
         arr.forEach(r=>{
