@@ -27,6 +27,7 @@ export function mountStatsView({ root, series, loadPrices }) {
       root.querySelectorAll('.series.open').forEach(r => { if (r !== row) r.classList.remove('open'); });
       // bascule
       row.classList.toggle('open');
+      head.setAttribute('aria-expanded', row.classList.contains('open') ? 'true' : 'false');
       if (row.classList.contains('open')) {
         await ensurePricesLoaded({ row, loadPrices });
       }
@@ -42,13 +43,16 @@ export function mountStatsView({ root, series, loadPrices }) {
       missBtn.parentElement.querySelectorAll('[data-miss]').forEach(b => b.removeAttribute('aria-pressed'));
       missBtn.setAttribute('aria-pressed', 'true');
       // affiche/masque
-      ['n','r','a'].forEach(k => {
-        const box = row.querySelector(`.chips[data-scope="${k}"]`);
-        if (box) box.hidden = (k !== scope);
-      });
-      // mémorise pour actions
-      row.dataset.missScope = scope;
-      return;
+    ['n','r','a'].forEach(k => {
+      const box = row.querySelector(`.chips[data-scope="${k}"]`);
+      if (box) {
+        const show = (k === scope);
+        box.hidden = !show;
+        box.style.display = show ? '' : 'none';
+      }
+    });
+    row.dataset.missScope = scope;
+    return;
     }
 
     // actions (copie / csv)
