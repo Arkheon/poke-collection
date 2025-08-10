@@ -1,5 +1,6 @@
 const PRICE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
-const PRICE_CACHE = new Map(); // setId -> items | 'loading'
+const PRICE_CACHE = new Map();    // setId -> items résolus (objet)
+const PRICE_PROMISES = new Map(); // setId -> Promise en cours
 
 function readSetCache(setId) {
   try {
@@ -19,25 +20,32 @@ function writeSetCache(setId, items) {
 
 export async function getSetPrices(setId) {
   if (!setId) return {};
-  if (PRICE_CACHE.has(setId) && PRICE_CACHE.get(setId) !== 'loading') return PRICE_CACHE.get(setId);
+  if (PRICE_CACHE.has(setId)) return PRICE_CACHE.get(setId);
+  if (PRICE_PROMISES.has(setId)) return PRICE_PROMISES.get(setId);
 
   const cached = readSetCache(setId);
   if (cached) { PRICE_CACHE.set(setId, cached); return cached; }
 
-  PRICE_CACHE.set(setId, 'loading');
-  try {
-    const r = await fetch(`prices/${setId}.json`, { cache: 'no-store' });
-    const j = await r.json();
-    const items = j.items || {};
-    PRICE_CACHE.set(setId, items);
-    writeSetCache(setId, items);
-    return items;
-  } catch (e) {
-    console.warn('prix non chargés', setId, e);
-    PRICE_CACHE.delete(setId);
-    return {};
-  }
-}
+  const p = (async () => {
+    try {
+      // chemin relatif à index.html (OK sur GitHub Pages)
+      const r = await fetch(`prices/${setId}.json`, { cache: 'no-store' });
+      const j = await r.json();
+      const items = j.items || {};
+      PRICE_CACHE.set(setId, items);
+      writeSetCache(setId, items);
+      return items;
+    } catch (e) {
+      console.warn('prix non chargés', setId, e);
+      PRICE_CACHE.delete(setId);
+      return {};
+    } finally {
+      PRICE_PROMISES.delete(setId);
+    }
+  })();
+  PRICE_PROMISES.set(setId, p);
+  return p;
+ }
 
 export function peekPriceCache(setId) {
   const v = PRICE_CACHE.get(setId);
