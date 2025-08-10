@@ -142,7 +142,7 @@
           <select id="view">
             <option value="owned">Possédées</option>
             <option value="missing">Manquantes (normales)</option>
-            <option value="missing_rev">Manquantes (reverse)</option>
+            <option value="missing_reverse">Manquantes (reverse)</option>
             <option value="missing_alt">Manquantes (alternatives)</option>
             <option value="all">Toutes</option>
           </select>
@@ -278,7 +278,7 @@
       RARITY_ORDER.forEach(key=>{
         const id = 'rk_'+key;
         const wrap = document.createElement('span'); wrap.className='chip';
-        theInput = document.createElement('input'); const input=theInput;
+        const input = document.createElement('input');
         input.type='checkbox'; input.id=id; input.checked=true; input.dataset.key=key;
         const label = document.createElement('label'); label.setAttribute('for', id); label.innerHTML = rarityIconsByKey(key); label.title = RARITY_LABELS[key];
         wrap.appendChild(input); wrap.appendChild(label); box.appendChild(wrap);
