@@ -282,25 +282,51 @@ function initApp(){
     return arr;
   }
 
-// ===== Valeur / Top 10 par série (support GG/TG) =====
+// ===== Valeur / Top 10 par série (gère GG/TG) =====
 async function computePriceStatsForSeries(slug){
+  // Assure la map FR → setId en mémoire
   await loadFrMap();
 
-  const mainId = getSetIdFromSlug(slug);
-  if (!mainId) return { available:false };
+  const setIdMain = getSetIdFromSlug(slug);
+  const setIdGG   = getSetIdFromSlug(`${slug}-gg`); // ex: "zenith-supreme-gg" → "swsh12pt5gg"
+  const setIdTG   = getSetIdFromSlug(`${slug}-tg`); // ex: "tempete-argentee-tg" → "swsh12tg"
 
-  // On regarde s'il existe des mappages pour les sous-sets
-  const ggId = getSetIdFromSlug(`${slug}-gg`) || null;
-  const tgId = getSetIdFromSlug(`${slug}-tg`) || null;
+  if (!setIdMain && !setIdGG && !setIdTG) return { available:false };
 
-  // Récupère les lignes de la série
-  const rows  = CARDS.filter(r => slugify(r['Série']) === slug);
+  // Récupère les pools de prix nécessaires
+  const [itemsMain, itemsGG, itemsTG] = await Promise.all([
+    setIdMain ? getSetPrices(setIdMain) : Promise.resolve(null),
+    setIdGG   ? getSetPrices(setIdGG)   : Promise.resolve(null),
+    setIdTG   ? getSetPrices(setIdTG)   : Promise.resolve(null),
+  ]);
 
-  // Précharge les prix nécessaires (principal + sous-sets s’ils existent)
-  const priceMaps = {};
-  priceMaps[mainId] = await getSetPrices(mainId);
-  if (ggId) priceMaps[ggId] = await getSetPrices(ggId);
-  if (tgId) priceMaps[tgId] = await getSetPrices(tgId);
+  // Les lignes de cartes de la série (principal + sous-sets, même colonne "Série")
+  const rows = CARDS.filter(r => slugify(r['Série']) === slug);
+
+  // Helpers
+  const isGG = (s)=> /^GG\d+/i.test(String(s||'').trim());
+  const isTG = (s)=> /^TG\d+/i.test(String(s||'').trim());
+
+  // Normalise un identifiant pour lookup: "14/198"→14, "GG05"→5, "TG01"→1, sinon renvoie la clé brute
+  const normIndex = (num)=>{
+    const raw = String(num ?? '').trim();
+    const den = raw.match(/^(\d+)\/\d+$/); if (den) return parseInt(den[1],10);
+    const gg  = raw.match(/^(?:GG|TG)?0*(\d+)$/i); if (gg) return parseInt(gg[1],10);
+    const n   = parseInt(raw,10); return Number.isFinite(n) ? n : raw;
+  };
+
+  const lookup = (num)=>{
+    const raw = String(num||'').trim().toUpperCase();
+    const pool = isGG(raw) ? itemsGG : isTG(raw) ? itemsTG : itemsMain;
+    if (!pool) return null;
+    const idx = normIndex(raw);
+    // essaie plusieurs clés possibles (certains JSON indexent 1..N, d'autres "GG01")
+    return pool[idx] ?? pool[raw] ?? pool[String(idx)] ?? null;
+  };
+
+  const pNorm = (e)=> Number(e?.trend ?? e?.avg30 ?? e?.avg7 ?? e?.low ?? 0) || 0;
+  const pRev  = (e)=> Number(e?.reverseTrend ?? 0) || pNorm(e);
+  const posInt = (v)=>{ const n=Number(String(v??'').replace(',','.')); return Number.isFinite(n)? Math.max(0,n):0; };
 
   const sum = {
     setU : { normal:0, reverse:0, alt:0 },
@@ -309,88 +335,57 @@ async function computePriceStatsForSeries(slug){
   };
   const topAll = [];
 
-  const pNorm = (e) => Number(e?.trend ?? e?.avg30 ?? e?.avg7 ?? e?.low ?? 0) || 0;
-  const pRev  = (e) => Number(e?.reverseTrend ?? 0) || pNorm(e);
-  const posInt = (v) => {
-    const n = Number(String(v ?? '').replace(',', '.'));
-    return Number.isFinite(n) ? Math.max(0, n) : 0;
-  };
-
   for (const r of rows){
-    const numeroStr = String(r['Numéro']||'').trim().toUpperCase();
+    const entry = lookup(r['Numéro']);
+    if (!entry) continue;
 
-    // Choix du set de prix et de la clé dans le JSON
-    let setIdForCard = mainId;
-    let key = Number(baseNumber(r));       // ex: "160/159" -> 160
-    if (/^GG\d+/i.test(numeroStr) && ggId){
-      setIdForCard = ggId;                 // ex: 'swsh12pt5gg'
-      key = numeroStr;                     // ex: "GG05"
-    } else if (/^TG\d+/i.test(numeroStr) && tgId){
-      setIdForCard = tgId;                 // ex: 'swsh12tg'
-      key = numeroStr;                     // ex: "TG20"
-    }
-    const items = priceMaps[setIdForCard] || {};
-    const e = items[key];
-    if (!e) {
-      // pas de prix connu -> on continue sans ajouter de valeur
-      continue;
-    }
-
-    // Présences
-    const hasN   = Number(r['Nb Normal'])  !== -1;
+    // Disponibilités par variante
+    const hasN   = Number(r['Nb Normal'])  !== -1 || isGG(r['Numéro']) || isTG(r['Numéro']);
     const hasR   = Number(r['Nb Reverse']) !== -1;
-    // IMPORTANT : GG/TG NE SONT PAS "alt"
     const hasAlt = Number(r['Alternative']) === 1;
 
-    // Prix unitaires
-    const nPrice = hasN   ? pNorm(e) : 0;
-    const rPrice = hasR   ? pRev(e)  : 0;
-    const aPrice = hasAlt ? pRev(e) || pNorm(e) : 0; // pour d'autres séries si "alt" existe
+    // Prix: GG/TG sont comptées comme "normal"
+    const priceN = pNorm(entry);
+    const priceR = pRev(entry);
+    const priceA = pRev(entry) || pNorm(entry); // fallback pour Alt
 
-    // Set unique (1 par version existante)
-    if (hasN)   sum.setU.normal  += nPrice;
-    if (hasR)   sum.setU.reverse += rPrice;
-    if (hasAlt) sum.setU.alt     += aPrice;
+    // Set unique (présence de la version)
+    if (hasN)   sum.setU.normal  += priceN;
+    if (hasR)   sum.setU.reverse += priceR;
+    if (hasAlt) sum.setU.alt     += priceA;
 
     // Quantités possédées
     const qN = posInt(r['Nb Normal']) + posInt(r['Nb Ed1']);
     const qR = hasR   ? posInt(r['Nb Reverse']) : 0;
     const qA = hasAlt ? posInt(r['Nb Spéciale'] ?? r['Nb Speciale']) : 0;
 
-    // Possédé (unique)
-    if (qN > 0) sum.ownU.normal  += nPrice;
-    if (qR > 0) sum.ownU.reverse += rPrice;
-    if (qA > 0) sum.ownU.alt     += aPrice;
+    // Possédé (unique): 1 si présent
+    if (qN > 0) sum.ownU.normal  += priceN;
+    if (qR > 0) sum.ownU.reverse += priceR;
+    if (qA > 0) sum.ownU.alt     += priceA;
 
-    // Possédé (doublons)
-    sum.ownD.normal  += qN * nPrice;
-    sum.ownD.reverse += qR * rPrice;
-    sum.ownD.alt     += qA * aPrice;
+    // Possédé (doublons): quantités réelles
+    sum.ownD.normal  += qN * priceN;
+    sum.ownD.reverse += qR * priceR;
+    sum.ownD.alt     += qA * priceA;
 
-    // Top 10 par prix normal (inclut GG/TG)
-    topAll.push({
-      numero: String(r['Numéro']||'—'),
-      nom   : String(r['Nom']||''),
-      price : nPrice
-    });
+    // Top cartes (prix normal) — inclut GG/TG
+    topAll.push({ numero:String(r['Numéro']||'—'), nom:String(r['Nom']||''), price:priceN });
   }
 
-  const withTotal = (o) => ({ ...o, total: o.normal + o.reverse + o.alt });
-  topAll.sort((a,b) => b.price - a.price);
+  const withTotal = (o)=> ({ ...o, total:o.normal + o.reverse + o.alt });
+  topAll.sort((a,b)=> b.price - a.price);
 
+  const anyAvailable = !!(itemsMain || itemsGG || itemsTG);
   return {
-    available: true,
-    setId: mainId,
+    available: anyAvailable,
+    setId: setIdMain || setIdGG || setIdTG || null,
     setUnique:   withTotal(sum.setU),
     ownedUnique: withTotal(sum.ownU),
     setDoubles:  withTotal(sum.ownD),
-    top10: topAll.slice(0, 10)
+    top10: topAll.slice(0,10)
   };
 }
-
-
-
-
 
 function renderStats(){
   const root = document.getElementById('stats-root');
