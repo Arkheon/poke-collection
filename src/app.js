@@ -8,9 +8,10 @@ import { mountStatsView } from './ui/statsView.js';
 
 // === RENDER SCHEDULER (évite les freeze par re-renders en cascade) ===
 let _rerenderTimer = null;
+let _renderRef = null; // sera alimenté depuis initApp()
 function scheduleRender(delay = 60){
   clearTimeout(_rerenderTimer);
-  _rerenderTimer = setTimeout(() => { try { render(); } catch {} }, delay);
+  _rerenderTimer = setTimeout(() => { try { _renderRef && _renderRef(); } catch {} }, delay);
 }
 
 export function boot() {
@@ -175,54 +176,63 @@ function initApp(){
 
   buildRarityDropdown();
 
-// ===================== Prix (utilisation des services) =====================
-function annotateRowsWithPrices(slug, arr){
-  // setId à utiliser pour une ligne donnée (gère sous-sets)
-  const setIdForRow = (r)=>{
-    const num = String(r['Numéro']||'').trim().toUpperCase();
-    if (/^GG\d+/.test(num)) return getSetIdFromSlug(`${slug}-gg`);
-    if (/^TG\d+/.test(num)) return getSetIdFromSlug(`${slug}-tg`);
-    return getSetIdFromSlug(slug);
-  };
+  // charge les prix pour la série + sous-sets (GG/TG) puis annote le tableau
+  async function annotateRowsWithPrices(slug, arr){
+    await loadFrMap();
 
-  // On s’assure d’avoir tous les pools nécessaires (main + GG/TG)
-  const needed = Array.from(new Set(arr.map(setIdForRow).filter(Boolean)));
-  const pools  = new Map();
-  let allReady = true;
+    const setIdMain = getSetIdFromSlug(slug);
+    const setIdGG   = getSetIdFromSlug(`${slug}-gg`);
+    const setIdTG   = getSetIdFromSlug(`${slug}-tg`);
 
-  needed.forEach(id=>{
-    const items = peekPriceCache(id);
-    if (items) pools.set(id, items);
-    else { allReady = false; getSetPrices(id).then(()=>{ try{ render(); }catch{} }); }
-  });
-  if (!allReady && pools.size === 0) return; // on relancera au prochain render
+    const [itemsMain, itemsGG, itemsTG] = await Promise.all([
+      setIdMain ? getSetPrices(setIdMain) : Promise.resolve(null),
+      setIdGG   ? getSetPrices(setIdGG)   : Promise.resolve(null),
+      setIdTG   ? getSetPrices(setIdTG)   : Promise.resolve(null),
+    ]);
 
-  // Trouve l’entrée prix dans un pool (supporte index numérique et clés "GG01"/"TG30")
-  const resolveEntry = (items, numStr)=>{
-    const raw = String(numStr||'').trim().toUpperCase();        // "GG05"
-    const idx = parseInt(raw.replace(/^\D+/,'').replace(/^0+/,'')||'0',10); // 5
-    // essaie toutes les formes courantes
-    return items[raw]
-        ?? items[idx]
-        ?? items[String(idx)]
-        ?? items['GG'+String(idx).padStart(2,'0')]
-        ?? items['TG'+String(idx).padStart(2,'0')]
-        ?? null;
-  };
+    const isGG = s => /^GG\d+/i.test(String(s||'').trim());
+    const isTG = s => /^TG\d+/i.test(String(s||'').trim());
 
-  // Annote chaque ligne avec le bon prix
-  arr.forEach(r=>{
-    const sid   = setIdForRow(r);
-    const items = pools.get(sid) || peekPriceCache(sid);
-    if (!items) return;
+    // "14/198" -> 14, "GG05"/"TG01" -> 5, sinon la clé brute
+    const normIndex = raw => {
+      const s = String(raw ?? '').trim();
+      const m1 = s.match(/^(\d+)\/\d+$/);         if (m1) return parseInt(m1[1],10);
+      const m2 = s.match(/^(?:GG|TG)?0*(\d+)$/i); if (m2) return parseInt(m2[1],10);
+      const n  = parseInt(s,10);                  return Number.isFinite(n) ? n : s.toUpperCase();
+    };
 
-    const entry = resolveEntry(items, r['Numéro']);
-    const p     = choosePrice(entry, r); // pour GG/TG: ce sera le "normal"
-    if (p != null) r['Prix'] = eur(Number(p));
-  });
-}
+    const lookup = num => {
+      const raw  = String(num||'').trim().toUpperCase();
+      const pool = isGG(raw) ? itemsGG : isTG(raw) ? itemsTG : itemsMain;
+      if (!pool) return null;
+      const k = normIndex(raw);
+      return pool[raw] ?? pool[k] ?? pool[String(k)] ?? null;
+    };
 
+    let added = false;
+    arr.forEach(r=>{
+      const raw = String(r['Numéro']||'').toUpperCase();
+      const entry = lookup(raw);
+      if (!entry) return;
 
+      // GG/TG = on utilise toujours le prix "normal"
+      const price = (isGG(raw) || isTG(raw))
+        ? priceFromEntry(entry, 'normal')
+        : choosePrice(entry, r);
+
+      if (price != null) {
+        const euro = eur(Number(price));
+        if (r['Prix'] !== euro) { // évite les re-renders inutiles
+          r['Prix'] = euro;
+          added = true;
+        }
+      }
+    });
+
+    if (added) {
+      scheduleRender(30); // redraw léger
+    }
+  }
 
   // Helpers prix par variante (utilisés côté stats si besoin)
   function priceFromEntry(entry, variant){
@@ -573,11 +583,12 @@ function annotateRowsWithPrices(slug, arr){
         const title = SERIE_CANON.get(slug) || 'Sans série';
         arr.sort(sortCardNumbers);
 
-        // ajoute le prix si dispo (lazy par série)
-         annotateRowsWithPrices(slug, arr);
-
         // Ajoute le prix seulement quand une série précise est sélectionnée
-
+        const serieSel = document.getElementById('serie');
+        const selectedSlug = serieSel ? serieSel.value : 'all';
+        if (selectedSlug !== 'all' && selectedSlug === slug) {
+          annotateRowsWithPrices(slug, arr);
+        }
 
         html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${title} <span class='hint'>(${arr.length} cartes)</span></h3><div class='grid'>`;
         arr.forEach(r=>{
@@ -672,6 +683,9 @@ function annotateRowsWithPrices(slug, arr){
 
     renderStats();
   }
+
+  // branche le scheduler APRÈS que render soit défini
+  _renderRef = render;
 
   // premier rendu
   render();
