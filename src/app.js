@@ -6,6 +6,12 @@ import { loadFrMap, getSetIdFromSlug } from './services/frMap.js';
 import { getSetPrices, peekPriceCache } from './services/priceService.js';
 import { mountStatsView } from './ui/statsView.js';
 
+// === RENDER SCHEDULER (évite les freeze par re-renders en cascade) ===
+let _rerenderTimer = null;
+function scheduleRender(delay = 60){
+  clearTimeout(_rerenderTimer);
+  _rerenderTimer = setTimeout(() => { try { render(); } catch {} }, delay);
+}
 
 export function boot() {
   if (document.readyState === 'loading') {
@@ -110,7 +116,7 @@ function initApp(){
   function loadCsvFromUrl(url, cb, onError){
     fetch(url,{cache:'no-store'})
       .then(r=>{ if(!r.ok) throw new Error(r.status+" "+r.statusText); return r.text(); })
-      .then(text=> Papa.parse(text,{header:true,skipEmptyLines:true,worker:true,complete:res=>cb(res.data)})
+      .then(text=> Papa.parse(text,{header:true,skipEmptyLines:true,complete:res=>cb(res.data)}))
       .catch(err=>{ console.warn('CSV auto-load failed for', url, err); onError && onError(err); });
   }
   loadCsvFromUrl(AUTO_SOURCES.cards, rows=>{ CARDS=normalizeRows(rows); refreshSeries(); render(); });
@@ -170,44 +176,39 @@ function initApp(){
   buildRarityDropdown();
 
   // ===================== Prix (utilisation des services) =====================
-function annotateRowsWithPrices(slug, arr){
-  const setIdMain = getSetIdFromSlug(slug);
-  const setIdGG   = getSetIdFromSlug(`${slug}-gg`);
-  const setIdTG   = getSetIdFromSlug(`${slug}-tg`);
+  // >>>>> NOUVELLE VERSION (batch + GG/TG) <<<<<
+  function annotateRowsWithPrices(slug, arr){
+    const idMain = getSetIdFromSlug(slug);
+    const idGG   = getSetIdFromSlug(`${slug}-gg`);
+    const idTG   = getSetIdFromSlug(`${slug}-tg`);
 
-  // charge les pools nécessaires (cache + lazy ok)
-  Promise.all([
-    setIdMain ? getSetPrices(setIdMain) : Promise.resolve(null),
-    setIdGG   ? getSetPrices(setIdGG)   : Promise.resolve(null),
-    setIdTG   ? getSetPrices(setIdTG)   : Promise.resolve(null),
-  ]).then(([poolMain, poolGG, poolTG])=>{
-    arr.forEach(r=>{
-      const numRaw = String(r['Numéro']||'').toUpperCase().trim();
-      const isGG = /^GG\d+/.test(numRaw);
-      const isTG = /^TG\d+/.test(numRaw);
-      const pool = isGG ? poolGG : isTG ? poolTG : poolMain;
-      if(!pool) return;
+    const promises = [];
+    if (idMain) promises.push(getSetPrices(idMain).then(items => ({kind:'main', items})));
+    if (idGG)   promises.push(getSetPrices(idGG).then(items   => ({kind:'gg',   items})));
+    if (idTG)   promises.push(getSetPrices(idTG).then(items   => ({kind:'tg',   items})));
+    if (!promises.length) return;
 
-      // clé possible: "GG05"/"TG01" ou index numérique
-      const idxNum = parseInt(numRaw.replace(/^(?:GG|TG)/,''), 10);
-      const key1 = numRaw;                 // "GG05" / "TG01" / "14/198"
-      const key2 = String(idxNum);         // "5" / "1"
-      const key3 = String(baseNumber(r));  // "14" si "14/198", etc.
+    Promise.all(promises).then(pools=>{
+      const P = { main:null, gg:null, tg:null };
+      pools.forEach(p => P[p.kind] = p.items);
 
-      const entry = pool[key1] ?? pool[key2] ?? pool[key3];
-      if(!entry) return;
+      arr.forEach(r=>{
+        const numRaw = String(r['Numéro']||'').trim();
+        const idx    = baseNumber(r); // "14/198"→14, "GG05"→5, "TG01"→1
+        let pool = P.main;
+        if (/^GG/i.test(numRaw)) pool = P.gg || P.main;
+        if (/^TG/i.test(numRaw)) pool = P.tg || P.main;
 
-      // GG/TG = prix normal
-      const p = priceFromEntry(entry, 'normal');
-      if(p>0) r['Prix'] = eur(p);
-    });
+        const entry = pool ? (pool[idx] ?? pool[numRaw] ?? pool[String(idx)] ?? null) : null;
+        const price = choosePrice(entry, r); // GG/TG traitées comme "normales"
+        if (price != null) r['Prix'] = eur(Number(price));
+      });
 
-    scheduleRender();
-  }).catch(()=>{ /* silence */ });
-}
+      scheduleRender(50); // un seul re-render batché
+    }).catch(()=>{ /* non bloquant */ });
+  }
 
-
-  // Helpers prix par variante
+  // Helpers prix par variante (utilisés côté stats si besoin)
   function priceFromEntry(entry, variant){
     if(!entry) return 0;
     const base = Number(entry.trend ?? entry.avg30 ?? entry.avg7 ?? entry.low ?? 0) || 0;
@@ -304,126 +305,112 @@ function annotateRowsWithPrices(slug, arr){
     return arr;
   }
 
-// ===== Valeur / Top 10 par série (gère GG/TG) =====
-async function computePriceStatsForSeries(slug){
-  // Assure la map FR → setId en mémoire
-  await loadFrMap();
+  // ===== Valeur / Top 10 par série (gère GG/TG) =====
+  async function computePriceStatsForSeries(slug){
+    await loadFrMap();
 
-  const setIdMain = getSetIdFromSlug(slug);
-  const setIdGG   = getSetIdFromSlug(`${slug}-gg`); // ex: "zenith-supreme-gg" → "swsh12pt5gg"
-  const setIdTG   = getSetIdFromSlug(`${slug}-tg`); // ex: "tempete-argentee-tg" → "swsh12tg"
+    const setIdMain = getSetIdFromSlug(slug);
+    const setIdGG   = getSetIdFromSlug(`${slug}-gg`); // ex. swsh12pt5gg
+    const setIdTG   = getSetIdFromSlug(`${slug}-tg`); // ex. swsh12tg
 
-  if (!setIdMain && !setIdGG && !setIdTG) return { available:false };
+    if (!setIdMain && !setIdGG && !setIdTG) return { available:false };
 
-  // Récupère les pools de prix nécessaires
-  const [itemsMain, itemsGG, itemsTG] = await Promise.all([
-    setIdMain ? getSetPrices(setIdMain) : Promise.resolve(null),
-    setIdGG   ? getSetPrices(setIdGG)   : Promise.resolve(null),
-    setIdTG   ? getSetPrices(setIdTG)   : Promise.resolve(null),
-  ]);
+    const [itemsMain, itemsGG, itemsTG] = await Promise.all([
+      setIdMain ? getSetPrices(setIdMain) : Promise.resolve(null),
+      setIdGG   ? getSetPrices(setIdGG)   : Promise.resolve(null),
+      setIdTG   ? getSetPrices(setIdTG)   : Promise.resolve(null),
+    ]);
 
-  // Les lignes de cartes de la série (principal + sous-sets, même colonne "Série")
-  const rows = CARDS.filter(r => slugify(r['Série']) === slug);
+    const rows = CARDS.filter(r => slugify(r['Série']) === slug);
 
-  // Helpers
-  const isGG = (s)=> /^GG\d+/i.test(String(s||'').trim());
-  const isTG = (s)=> /^TG\d+/i.test(String(s||'').trim());
+    const isGG = (s)=> /^GG\d+/i.test(String(s||'').trim());
+    const isTG = (s)=> /^TG\d+/i.test(String(s||'').trim());
 
-  // Normalise un identifiant pour lookup: "14/198"→14, "GG05"→5, "TG01"→1, sinon renvoie la clé brute
-  const normIndex = (num)=>{
-    const raw = String(num ?? '').trim();
-    const den = raw.match(/^(\d+)\/\d+$/); if (den) return parseInt(den[1],10);
-    const gg  = raw.match(/^(?:GG|TG)?0*(\d+)$/i); if (gg) return parseInt(gg[1],10);
-    const n   = parseInt(raw,10); return Number.isFinite(n) ? n : raw;
-  };
+    const normIndex = (num)=>{
+      const raw = String(num ?? '').trim();
+      const den = raw.match(/^(\d+)\/\d+$/); if (den) return parseInt(den[1],10);
+      const gg  = raw.match(/^(?:GG|TG)?0*(\d+)$/i); if (gg) return parseInt(gg[1],10);
+      const n   = parseInt(raw,10); return Number.isFinite(n) ? n : raw;
+    };
 
-  const lookup = (num)=>{
-    const raw = String(num||'').trim().toUpperCase();
-    const pool = isGG(raw) ? itemsGG : isTG(raw) ? itemsTG : itemsMain;
-    if (!pool) return null;
-    const idx = normIndex(raw);
-    // essaie plusieurs clés possibles (certains JSON indexent 1..N, d'autres "GG01")
-    return pool[idx] ?? pool[raw] ?? pool[String(idx)] ?? null;
-  };
+    const lookup = (num)=>{
+      const raw = String(num||'').trim().toUpperCase();
+      const pool = isGG(raw) ? itemsGG : isTG(raw) ? itemsTG : itemsMain;
+      if (!pool) return null;
+      const idx = normIndex(raw);
+      return pool[idx] ?? pool[raw] ?? pool[String(idx)] ?? null;
+    };
 
-  const pNorm = (e)=> Number(e?.trend ?? e?.avg30 ?? e?.avg7 ?? e?.low ?? 0) || 0;
-  const pRev  = (e)=> Number(e?.reverseTrend ?? 0) || pNorm(e);
-  const posInt = (v)=>{ const n=Number(String(v??'').replace(',','.')); return Number.isFinite(n)? Math.max(0,n):0; };
+    const pNorm = (e)=> Number(e?.trend ?? e?.avg30 ?? e?.avg7 ?? e?.low ?? 0) || 0;
+    const pRev  = (e)=> Number(e?.reverseTrend ?? 0) || pNorm(e);
+    const posInt = (v)=>{ const n=Number(String(v??'').replace(',','.')); return Number.isFinite(n)? Math.max(0, n):0; };
 
-  const sum = {
-    setU : { normal:0, reverse:0, alt:0 },
-    ownU : { normal:0, reverse:0, alt:0 },
-    ownD : { normal:0, reverse:0, alt:0 },
-  };
-  const topAll = [];
+    const sum = {
+      setU : { normal:0, reverse:0, alt:0 },
+      ownU : { normal:0, reverse:0, alt:0 },
+      ownD : { normal:0, reverse:0, alt:0 },
+    };
+    const topAll = [];
 
-  for (const r of rows){
-    const entry = lookup(r['Numéro']);
-    if (!entry) continue;
+    for (const r of rows){
+      const entry = lookup(r['Numéro']);
+      if (!entry) continue;
 
-    // Disponibilités par variante
-    const hasN   = Number(r['Nb Normal'])  !== -1 || isGG(r['Numéro']) || isTG(r['Numéro']);
-    const hasR   = Number(r['Nb Reverse']) !== -1;
-    const hasAlt = Number(r['Alternative']) === 1;
+      const hasN   = Number(r['Nb Normal'])  !== -1 || isGG(r['Numéro']) || isTG(r['Numéro']);
+      const hasR   = Number(r['Nb Reverse']) !== -1;
+      const hasAlt = Number(r['Alternative']) === 1;
 
-    // Prix: GG/TG sont comptées comme "normal"
-    const priceN = pNorm(entry);
-    const priceR = pRev(entry);
-    const priceA = pRev(entry) || pNorm(entry); // fallback pour Alt
+      const priceN = pNorm(entry); // GG/TG comptent en "Normal"
+      const priceR = pRev(entry);
+      const priceA = pRev(entry) || pNorm(entry); // Alt fallback
 
-    // Set unique (présence de la version)
-    if (hasN)   sum.setU.normal  += priceN;
-    if (hasR)   sum.setU.reverse += priceR;
-    if (hasAlt) sum.setU.alt     += priceA;
+      if (hasN)   sum.setU.normal  += priceN;
+      if (hasR)   sum.setU.reverse += priceR;
+      if (hasAlt) sum.setU.alt     += priceA;
 
-    // Quantités possédées
-    const qN = posInt(r['Nb Normal']) + posInt(r['Nb Ed1']);
-    const qR = hasR   ? posInt(r['Nb Reverse']) : 0;
-    const qA = hasAlt ? posInt(r['Nb Spéciale'] ?? r['Nb Speciale']) : 0;
+      const qN = posInt(r['Nb Normal']) + posInt(r['Nb Ed1']);
+      const qR = hasR   ? posInt(r['Nb Reverse']) : 0;
+      const qA = hasAlt ? posInt(r['Nb Spéciale'] ?? r['Nb Speciale']) : 0;
 
-    // Possédé (unique): 1 si présent
-    if (qN > 0) sum.ownU.normal  += priceN;
-    if (qR > 0) sum.ownU.reverse += priceR;
-    if (qA > 0) sum.ownU.alt     += priceA;
+      if (qN > 0) sum.ownU.normal  += priceN;
+      if (qR > 0) sum.ownU.reverse += priceR;
+      if (qA > 0) sum.ownU.alt     += priceA;
 
-    // Possédé (doublons): quantités réelles
-    sum.ownD.normal  += qN * priceN;
-    sum.ownD.reverse += qR * priceR;
-    sum.ownD.alt     += qA * priceA;
+      sum.ownD.normal  += qN * priceN;
+      sum.ownD.reverse += qR * priceR;
+      sum.ownD.alt     += qA * priceA;
 
-    // Top cartes (prix normal) — inclut GG/TG
-    topAll.push({ numero:String(r['Numéro']||'—'), nom:String(r['Nom']||''), price:priceN });
+      topAll.push({ numero:String(r['Numéro']||'—'), nom:String(r['Nom']||''), price:priceN });
+    }
+
+    const withTotal = (o)=> ({ ...o, total:o.normal + o.reverse + o.alt });
+    topAll.sort((a,b)=> b.price - a.price);
+
+    const anyAvailable = !!(itemsMain || itemsGG || itemsTG);
+    return {
+      available: anyAvailable,
+      setId: setIdMain || setIdGG || setIdTG || null,
+      setUnique:   withTotal(sum.setU),
+      ownedUnique: withTotal(sum.ownU),
+      setDoubles:  withTotal(sum.ownD),
+      top10: topAll.slice(0,10)
+    };
   }
 
-  const withTotal = (o)=> ({ ...o, total:o.normal + o.reverse + o.alt });
-  topAll.sort((a,b)=> b.price - a.price);
-
-  const anyAvailable = !!(itemsMain || itemsGG || itemsTG);
-  return {
-    available: anyAvailable,
-    setId: setIdMain || setIdGG || setIdTG || null,
-    setUnique:   withTotal(sum.setU),
-    ownedUnique: withTotal(sum.ownU),
-    setDoubles:  withTotal(sum.ownD),
-    top10: topAll.slice(0,10)
-  };
-}
-
-function renderStats(){
-  const root = document.getElementById('stats-root');
-  const data = computeStatsPerSeries();
-  try{
-    mountStatsView({
-      root,
-      series: data,
-      loadPrices: computePriceStatsForSeries, // fonction déjà présente dans app.js
-    });
-  }catch(err){
-    console.error('renderStats failed', err);
-    if(root) root.innerHTML = `<div class="empty">Erreur d’affichage des stats.</div>`;
+  function renderStats(){
+    const root = document.getElementById('stats-root');
+    const data = computeStatsPerSeries();
+    try{
+      mountStatsView({
+        root,
+        series: data,
+        loadPrices: computePriceStatsForSeries,
+      });
+    }catch(err){
+      console.error('renderStats failed', err);
+      if(root) root.innerHTML = `<div class="empty">Erreur d’affichage des stats.</div>`;
+    }
   }
-}
-
 
   // ===== Helpers UI =====
   function rebuildSerieCanon() {
@@ -511,16 +498,6 @@ function renderStats(){
     if(img){ openModal(img.src, img.alt); }
   });
 
-let RENDER_SCHEDULED = false;
-function scheduleRender(){
-  if (RENDER_SCHEDULED) return;
-  RENDER_SCHEDULED = true;
-  requestAnimationFrame(() => {
-    RENDER_SCHEDULED = false;
-    try { render(); } catch {}
-  });
-}
-  
   // ===== RENDER =====
   function render(){
     // CARTES
@@ -580,12 +557,8 @@ function scheduleRender(){
         const title = SERIE_CANON.get(slug) || 'Sans série';
         arr.sort(sortCardNumbers);
 
-        // Enrichit les prix seulement si une série précise est sélectionnée
-        const serieSel = document.getElementById('serie');
-        const selectedSlug = serieSel ? serieSel.value : 'all';
-        if (selectedSlug !== 'all') {
-          annotateRowsWithPrices(slug, arr);
-        }
+        // ajoute le prix si dispo (lazy par série)
+        annotateRowsWithPrices(slug, arr);
 
         html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${title} <span class='hint'>(${arr.length} cartes)</span></h3><div class='grid'>`;
         arr.forEach(r=>{
