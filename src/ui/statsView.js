@@ -6,7 +6,7 @@ import { eur } from '../domain/pricing.js';
  * @param {Object} deps
  * @param {HTMLElement} deps.root - conteneur
  * @param {Array} deps.series - retour de computeStatsPerSeries()
- * @param {Function} deps.loadPrices - (slug)=>Promise<priceStats> (computePriceStatsForSeries)
+ * @param {Function} deps.loadPrices - (slug)=>Promise<priceStats>
  */
 export function mountStatsView({ root, series, loadPrices }) {
   if (!root) return;
@@ -15,97 +15,80 @@ export function mountStatsView({ root, series, loadPrices }) {
     return;
   }
 
-  root.innerHTML = series.map(s => renderSeriesBlock(s)).join('');
+  root.innerHTML = series.map(renderSeriesBlock).join('');
 
-  // === DÉLÉGATION D’ÉVÉNEMENTS (1 seul listener pour tout) ===
+  // délégation d'événements unique
   root.addEventListener('click', async (e) => {
+    // ouvrir/fermer une série
     const head = e.target.closest('.s-head');
-    if (head) {
+    if (head && root.contains(head)) {
       const row = head.closest('.series');
-      if (!row) return;
-
-      // ferme les autres séries
+      // fermer les autres
       root.querySelectorAll('.series.open').forEach(r => { if (r !== row) r.classList.remove('open'); });
+      // bascule
       row.classList.toggle('open');
-
-      // charge les prix au premier open
       if (row.classList.contains('open')) {
-        await ensurePricesLoaded({ root, row, loadPrices });
+        await ensurePricesLoaded({ row, loadPrices });
       }
       return;
     }
 
-    // Manquantes : filtres (N/R/A)
+    // filtres manquantes (N/R/A)
     const missBtn = e.target.closest('[data-miss]');
-    if (missBtn) {
+    if (missBtn && root.contains(missBtn)) {
       const row = missBtn.closest('.series');
-      const slug = row?.dataset.slug;
-      const scope = missBtn.dataset.miss; // 'n' | 'r' | 'a'
-      if (!slug || !scope) return;
-
-      // état actif visuel
+      const scope = missBtn.dataset.miss; // 'n'|'r'|'a'
+      // visuel actif
       missBtn.parentElement.querySelectorAll('[data-miss]').forEach(b => b.removeAttribute('aria-pressed'));
       missBtn.setAttribute('aria-pressed', 'true');
-
-      // masque/affiche les listes
-      ['n', 'r', 'a'].forEach(k => {
-        const box = root.querySelector(`#miss-${k}-${slug}`);
+      // affiche/masque
+      ['n','r','a'].forEach(k => {
+        const box = row.querySelector(`.chips[data-scope="${k}"]`);
         if (box) box.hidden = (k !== scope);
       });
-
-      // mémorise l’onglet courant (utile pour copier/exporter)
+      // mémorise pour actions
       row.dataset.missScope = scope;
       return;
     }
 
-    // Actions
+    // actions (copie / csv)
     const actBtn = e.target.closest('[data-action]');
-    if (actBtn) {
+    if (actBtn && root.contains(actBtn)) {
       const row = actBtn.closest('.series');
-      if (!row) return;
-      const slug = row.dataset.slug;
-      const scope = row.dataset.missScope || 'a'; // défaut: onglet Alternatives
-
+      const scope = row.dataset.missScope || 'a';
+      const items = readMissingForScope(row, scope);
       if (actBtn.dataset.action === 'copy') {
-        const items = readMissingForScope(root, slug, scope);
-        const text = items.map(x => `${x.numero} • ${x.nom}`).join('\n') || '';
-        await copyToClipboard(text);
-        actBtn.disabled = true;
-        setTimeout(() => (actBtn.disabled = false), 800);
+        await copyToClipboard(items.map(x => `${x.numero} • ${x.nom}`).join('\n'));
         return;
       }
       if (actBtn.dataset.action === 'csv') {
-        const items = readMissingForScope(root, slug, scope);
         const csv = buildCsv(items);
-        downloadBlob(csv, `manquantes_${slug}_${scope}.csv`, 'text/csv;charset=utf-8;');
-        actBtn.disabled = true;
-        setTimeout(() => (actBtn.disabled = false), 800);
+        downloadBlob(csv, `manquantes_${row.dataset.slug}_${scope}.csv`, 'text/csv;charset=utf-8;');
         return;
       }
     }
 
-    // Tuile valeur -> met à jour le donut
+    // tuiles valeur -> met à jour le donut
     const tile = e.target.closest('.tile[data-view]');
-    if (tile) {
+    if (tile && root.contains(tile)) {
       const row = tile.closest('.series');
-      if (!row) return;
       row.querySelectorAll('.tile[data-view]').forEach(x => x.removeAttribute('aria-current'));
       tile.setAttribute('aria-current', 'true');
       const key = tile.dataset.view;
       updateDonutFor(row, key);
-      return;
     }
   });
 }
 
-/* ===================== RENDER ===================== */
+/* =============== RENDER =============== */
 
 function renderSeriesBlock(s) {
+  // dataset.missScope par défaut = 'a' (Alternatives)
   return `
-    <div class="series" data-slug="${s.slug}">
-      <div class="s-head" role="button">
+    <div class="series" data-slug="${s.slug}" data-miss-scope="a">
+      <div class="s-head" role="button" aria-expanded="false">
         <div class="s-title">${s.label}</div>
-        <div class="progress" aria-hidden="true"><span style="width:${Math.min(100, Math.max(0, s.completion)).toFixed(2)}%"></span></div>
+        <div class="progress" aria-hidden="true"><span style="width:${clamp01(s.completion/100)*100}%"></span></div>
         <div class="s-meta">${s.done} / ${s.size} (${s.completion.toFixed(1)}%)</div>
       </div>
       <div class="s-body">
@@ -126,20 +109,20 @@ function renderSeriesBlock(s) {
             <div class="card missing">
               <h3>Manquantes</h3>
               <div class="content">
-                <div class="toolbar">
+                <div class="toolbar" style="margin-bottom:6px">
                   <button class="btn" data-miss="n">Normales (${s.missN.length})</button>
                   <button class="btn" data-miss="r">Reverse (${s.missR.length})</button>
                   <button class="btn" data-miss="a" aria-pressed="true">Alternatives (${s.missAlt.length})</button>
                 </div>
-                <div class="chips" id="miss-a-${s.slug}">${renderChips(s.missAlt)}</div>
-                <div class="chips" id="miss-n-${s.slug}" hidden>${renderChips(s.missN)}</div>
-                <div class="chips" id="miss-r-${s.slug}" hidden>${renderChips(s.missR)}</div>
+                <div class="chips" data-scope="a">${renderChips(s.missAlt)}</div>
+                <div class="chips" data-scope="n" hidden>${renderChips(s.missN)}</div>
+                <div class="chips" data-scope="r" hidden>${renderChips(s.missR)}</div>
               </div>
             </div>
 
             <div class="card top">
               <h3>Top cartes (prix normal)</h3>
-              <div class="content"><div class="top-list" id="top-${s.slug}"><span class="muted">—</span></div></div>
+              <div class="content"><div class="top-list" data-top><span class="muted">—</span></div></div>
             </div>
           </div>
 
@@ -150,40 +133,40 @@ function renderSeriesBlock(s) {
                 <div class="tiles">
                   <div class="tile" data-view="set" data-label="Set unique" aria-current="true">
                     <div class="muted">Valeur set complet</div>
-                    <b id="v-set-${s.slug}" class="num">—</b>
-                    <div class="seg"><span class="ball n"></span><span id="v-set-n-${s.slug}" class="muted num">—</span></div>
-                    <div class="seg"><span class="ball r"></span><span id="v-set-r-${s.slug}" class="muted num">—</span></div>
-                    <div class="seg"><span class="ball a"></span><span id="v-set-a-${s.slug}" class="muted num">—</span></div>
+                    <b class="num" data-val="set-total">—</b>
+                    <div class="seg"><span class="ball n"></span><span class="muted num" data-val="set-n">—</span></div>
+                    <div class="seg"><span class="ball r"></span><span class="muted num" data-val="set-r">—</span></div>
+                    <div class="seg"><span class="ball a"></span><span class="muted num" data-val="set-a">—</span></div>
                   </div>
                   <div class="tile" data-view="ownU" data-label="Possédé (unique)">
                     <div class="muted">Possédé (unique)</div>
-                    <b id="v-ownU-${s.slug}" class="num">—</b>
-                    <div class="seg"><span class="ball n"></span><span id="v-ownU-n-${s.slug}" class="muted num">—</span></div>
-                    <div class="seg"><span class="ball r"></span><span id="v-ownU-r-${s.slug}" class="muted num">—</span></div>
-                    <div class="seg"><span class="ball a"></span><span id="v-ownU-a-${s.slug}" class="muted num">—</span></div>
+                    <b class="num" data-val="ownU-total">—</b>
+                    <div class="seg"><span class="ball n"></span><span class="muted num" data-val="ownU-n">—</span></div>
+                    <div class="seg"><span class="ball r"></span><span class="muted num" data-val="ownU-r">—</span></div>
+                    <div class="seg"><span class="ball a"></span><span class="muted num" data-val="ownU-a">—</span></div>
                   </div>
                   <div class="tile" data-view="ownD" data-label="Possédé (doublons)">
                     <div class="muted">Possédé (doublons)</div>
-                    <b id="v-ownD-${s.slug}" class="num">—</b>
-                    <div class="seg"><span class="ball n"></span><span id="v-ownD-n-${s.slug}" class="muted num">—</span></div>
-                    <div class="seg"><span class="ball r"></span><span id="v-ownD-r-${s.slug}" class="muted num">—</span></div>
-                    <div class="seg"><span class="ball a"></span><span id="v-ownD-a-${s.slug}" class="muted num">—</span></div>
+                    <b class="num" data-val="ownD-total">—</b>
+                    <div class="seg"><span class="ball n"></span><span class="muted num" data-val="ownD-n">—</span></div>
+                    <div class="seg"><span class="ball r"></span><span class="muted num" data-val="ownD-r">—</span></div>
+                    <div class="seg"><span class="ball a"></span><span class="muted num" data-val="ownD-a">—</span></div>
                   </div>
                 </div>
 
                 <div class="donut">
-                  <svg viewBox="0 0 42 42" class="donut" id="dn-${s.slug}" aria-label="Répartition">
+                  <svg viewBox="0 0 42 42" class="donut" data-donut aria-label="Répartition">
                     <circle cx="21" cy="21" r="15.915" fill="none" stroke="#e5e7eb" stroke-width="6"></circle>
                     <circle class="seg-n" cx="21" cy="21" r="15.915" fill="none" stroke="#ef4444" stroke-width="6" stroke-dasharray="0 100" stroke-dashoffset="25"></circle>
                     <circle class="seg-r" cx="21" cy="21" r="15.915" fill="none" stroke="#eab308" stroke-width="6" stroke-dasharray="0 100" stroke-dashoffset="25"></circle>
                     <circle class="seg-a" cx="21" cy="21" r="15.915" fill="none" stroke="#3b82f6" stroke-width="6" stroke-dasharray="0 100" stroke-dashoffset="25"></circle>
                   </svg>
                   <div class="mini-legend">
-                    <span><span class="ball n"></span> <span id="dl-n-${s.slug}">—%</span></span>
-                    <span><span class="ball r"></span> <span id="dl-r-${s.slug}">—%</span></span>
-                    <span><span class="ball a"></span> <span id="dl-a-${s.slug}">—%</span></span>
+                    <span><span class="ball n"></span> <span data-dl="n">—%</span></span>
+                    <span><span class="ball r"></span> <span data-dl="r">—%</span></span>
+                    <span><span class="ball a"></span> <span data-dl="a">—%</span></span>
                   </div>
-                  <div class="muted" id="dn-label-${s.slug}">Répartition — Set unique</div>
+                  <div class="muted" data-donut-label>Répartition — Set unique</div>
                 </div>
               </div>
             </div>
@@ -206,24 +189,24 @@ function renderSeriesBlock(s) {
   `;
 }
 
-/* ===================== HELPERS ===================== */
+/* =============== DATA/APPLY ================= */
 
 function renderChips(arr) {
   if (!arr || !arr.length) return '<span class="muted">—</span>';
   return arr.map(m => `<span class="pill pill--sm">${m.numero ? `${m.numero} • ${m.nom}` : `${m}`}</span>`).join('');
 }
 
-function setTileValues(root, slug, key, vals) {
-  const id = (s) => root.querySelector(`#${s}-${slug}`);
-  const fmt = (n) => eur(n || 0);
-  id(`v-${key}`).textContent   = fmt(vals.total);
-  id(`v-${key}-n`).textContent = fmt(vals.normal);
-  id(`v-${key}-r`).textContent = fmt(vals.reverse);
-  id(`v-${key}-a`).textContent = fmt(vals.alt);
+function setTileValues(row, key, vals) {
+  const q = (sel) => row.querySelector(`[data-val="${sel}"]`);
+  const F = (n) => eur(n || 0);
+  q(`${key}-total`).textContent = F(vals.total);
+  q(`${key}-n`).textContent     = F(vals.normal);
+  q(`${key}-r`).textContent     = F(vals.reverse);
+  q(`${key}-a`).textContent     = F(vals.alt);
 }
 
-function updateDonut(root, slug, values) {
-  const svg = root.querySelector(`#dn-${slug}`);
+function updateDonut(row, values) {
+  const svg = row.querySelector('[data-donut]');
   if (!svg) return;
   const total = Math.max(1, (values.normal || 0) + (values.reverse || 0) + (values.alt || 0));
   const n = (values.normal || 0) / total * 100;
@@ -238,86 +221,105 @@ function updateDonut(root, slug, values) {
   segR.setAttribute('stroke-dashoffset', 25 - n);
   segA.setAttribute('stroke-dashoffset', 25 - n - r);
 
-  const setTxt = (k, v) => {
-    const el = root.querySelector(`#dl-${k}-${slug}`);
-    if (el) el.textContent = `${v.toFixed(0)}%`;
-  };
+  const setTxt = (k, v) => { const el = row.querySelector(`[data-dl="${k}"]`); if (el) el.textContent = `${v.toFixed(0)}%`; };
   setTxt('n', n); setTxt('r', r); setTxt('a', a);
 }
 
 function updateDonutFor(row, key) {
-  const slug = row.dataset.slug;
-  const SU = row._priceStats?.setUnique;
-  const OU = row._priceStats?.ownedUnique;
-  const OD = row._priceStats?.setDoubles;
-  const label = row.querySelector(`#dn-label-${slug}`);
-  if (!SU) return;
-  const values = key === 'ownU' ? OU : key === 'ownD' ? OD : SU;
-  const txt = key === 'ownU' ? 'Possédé (unique)' : key === 'ownD' ? 'Possédé (doublons)' : 'Set unique';
-  updateDonut(row, slug, values);
-  if (label) label.textContent = `Répartition — ${txt}`;
+  const stats = row._priceStats;
+  if (!stats) return;
+  const values = key === 'ownU' ? stats.ownedUnique
+               : key === 'ownD' ? stats.setDoubles
+               : stats.setUnique;
+  updateDonut(row, values);
+  const label = row.querySelector('[data-donut-label]');
+  if (label) label.textContent = `Répartition — ${key === 'ownU' ? 'Possédé (unique)' : key === 'ownD' ? 'Possédé (doublons)' : 'Set unique'}`;
 }
 
-async function ensurePricesLoaded({ root, row, loadPrices }) {
-  const slug = row.dataset.slug;
+async function ensurePricesLoaded({ row, loadPrices }) {
   if (row.dataset.priceLoaded === '1') return;
-
   row.dataset.priceLoaded = '1';
+  const slug = row.dataset.slug;
+
   try {
-    const res = await loadPrices(slug);
+    const raw = await loadPrices(slug);
+    const res = normalizePriceStats(raw);
     if (!res || !res.available) {
-      // pas de mapping de prix : on laisse le contenu à « — »
-      const topBox = row.querySelector('#top-' + slug);
-      if (topBox) topBox.innerHTML = '<span class="muted">Aucun prix disponible pour cette série.</span>';
+      const top = row.querySelector('[data-top]');
+      if (top) top.innerHTML = '<span class="muted">Aucun prix disponible pour cette série.</span>';
       return;
     }
-
-    // stocke les valeurs sur le noeud (évite de re-requêter)
+    // garde en mémoire
     row._priceStats = res;
 
     // valeurs
-    const SU = res.setUnique, OU = res.ownedUnique, OD = res.setDoubles;
-    setTileValues(row, slug, 'set',  SU);
-    setTileValues(row, slug, 'ownU', OU);
-    setTileValues(row, slug, 'ownD', OD);
+    setTileValues(row, 'set',  res.setUnique);
+    setTileValues(row, 'ownU', res.ownedUnique);
+    setTileValues(row, 'ownD', res.setDoubles);
 
-    // donut par défaut = set unique
-    updateDonut(row, slug, SU);
+    // donut par défaut
+    updateDonut(row, res.setUnique);
 
     // top 10
-    const list = row.querySelector('#top-' + slug);
-    if (list) {
-      const html = (res.top10 || []).map(x =>
-        `<span class="pill pill--sm">${x.numero} • ${x.nom} — ${eur(x.price)}</span>`
-      ).join('');
-      list.innerHTML = html || '<span class="muted">—</span>';
+    const topList = row.querySelector('[data-top]');
+    if (topList) {
+      const items = (res.top10 || []).map(x => {
+        const numero = x.numero ?? '';
+        const nom    = x.nom ?? '';
+        const price  = typeof x.price === 'number' ? eur(x.price) : (x.price || '');
+        return `<span class="pill pill--sm">${numero} • ${nom} — ${price}</span>`;
+      }).join('');
+      topList.innerHTML = items || '<span class="muted">—</span>';
     }
   } catch (err) {
     console.error('loadPrices error', err);
-    row.dataset.priceLoaded = '0'; // autorise un 2e essai
+    row.dataset.priceLoaded = '0'; // autorise un retry
   }
 }
 
-function readMissingForScope(root, slug, scope /* 'n'|'r'|'a' */) {
-  const box = root.querySelector(`#miss-${scope}-${slug}`);
+/**
+ * Compat : accepte l’ancienne forme ({valueSet, valueOwnedUnique, valueOwnedDupes})
+ * et la nouvelle ({setUnique, ownedUnique, setDoubles})
+ */
+function normalizePriceStats(res) {
+  if (!res) return null;
+  if (res.setUnique && res.ownedUnique && res.setDoubles) return res;
+  // ancienne forme -> totaux seulement, segments à 0
+  if ('valueSet' in res || 'valueOwnedUnique' in res || 'valueOwnedDupes' in res) {
+    return {
+      available: true,
+      setId: res.setId,
+      setUnique:   { total: +res.valueSet || 0, normal: 0, reverse: 0, alt: 0 },
+      ownedUnique: { total: +res.valueOwnedUnique || 0, normal: 0, reverse: 0, alt: 0 },
+      setDoubles:  { total: +res.valueOwnedDupes || 0, normal: 0, reverse: 0, alt: 0 },
+      top10: res.top10 || []
+    };
+  }
+  return res;
+}
+
+/* =============== ACTIONS & UTILS =============== */
+
+function readMissingForScope(row, scope) {
+  const box = row.querySelector(`.chips[data-scope="${scope}"]`);
   if (!box) return [];
-  // chaque badge est "NN/NNN • Nom"
-  const items = Array.from(box.querySelectorAll('.pill')).map(el => {
+  return Array.from(box.querySelectorAll('.pill')).map(el => {
     const txt = el.textContent.trim();
     const [numero, nom] = txt.split('•').map(s => s.trim());
     return { numero: numero || '', nom: nom || '' };
   });
-  return items;
 }
 
 function buildCsv(items) {
   const rows = [['Numéro', 'Nom'], ...items.map(i => [i.numero, i.nom])];
-  return rows.map(row => row.map(escapeCsv).join(',')).join('\n');
+  return rows.map(r => r.map(escapeCsv).join(',')).join('\n');
 }
+
 function escapeCsv(s) {
   const v = String(s ?? '');
   return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 }
+
 function downloadBlob(text, filename, type) {
   const blob = new Blob([text], { type });
   const url = URL.createObjectURL(blob);
@@ -326,14 +328,19 @@ function downloadBlob(text, filename, type) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(() => URL.revokeObjectURL(url), 500);
 }
+
 async function copyToClipboard(text) {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
     const ta = document.createElement('textarea');
-    ta.value = text; document.body.appendChild(ta); ta.select();
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
     try { document.execCommand('copy'); } finally { ta.remove(); }
   }
 }
+
+function clamp01(x){ return Math.max(0, Math.min(1, x)); }
