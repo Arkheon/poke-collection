@@ -589,39 +589,33 @@
           rows=rows.filter(r=>['Nom','Numéro','Série'].some(k=>String(r[k]||'').toLowerCase().includes(qq)));
         }
 
-        // === Vue (possédées / manquantes / etc.)
-        const mode = document.getElementById('view').value;
-        const num = (v) => {
-          const n = Number(String(v ?? '').replace(',', '.'));
-          return Number.isNaN(n) ? 0 : n;
-        };
-        const altExists = (r) => {
-          const flag = Number(r['Alternative']);
-          const nbS = num(r['Nb Spéciale']);
-          return flag === 1 || (!Number.isNaN(nbS) && nbS !== -1);
-        };
+// Vue (possédées / manquantes / toutes)
+const mode = document.getElementById('view').value;
+rows = rows.filter(r => {
+  const n  = Number(r['Nb Normal']);
+  const rv = Number(r['Nb Reverse']);
+  const sp = Number(r['Nb Spéciale']);
+  const alt = Number(r['Alternative']); // 1 = il existe une alternative
 
-        if (mode === 'owned') {
-          rows = rows.filter(r =>
-            num(r['Nb Normal']) > 0 ||
-            num(r['Nb Reverse']) > 0 ||
-            num(r['Nb Spéciale']) > 0 ||
-            num(r['Nb Ed1']) > 0
-          );
-        } else if (mode === 'missing') {
-          rows = rows.filter(r => {
-            const n = num(r['Nb Normal']);
-            return n !== -1 && n <= 0;
-          });
-        } else if (mode === 'missing_rev') {
-          rows = rows.filter(r => {
-            const n = num(r['Nb Reverse']);
-            return n !== -1 && n <= 0;
-          });
-        } else if (mode === 'missing_alt') {
-          rows = rows.filter(r => altExists(r) && num(r['Nb Spéciale']) <= 0);
-        }
-        // else 'all' => pas de filtre
+  switch (mode) {
+    case 'owned':
+      return (n > 0) || (rv > 0) || (sp > 0) || (Number(r['Nb Ed1']) > 0);
+
+    case 'missing': // manquantes normales qui existent
+      return (n !== -1) && (n <= 0);
+
+    case 'missing_reverse': // manquantes reverse qui existent
+      return (rv !== -1) && (rv <= 0);
+
+    case 'missing_alt': // même logique que Stats
+      return (alt === 1) && (sp <= 0);
+
+    case 'all':
+    default:
+      return true;
+  }
+});
+
 
         // Raretés cochées
         rows=rows.filter(r=>{ const {key}=rarityFromRow(r); return !key || selectedRarities.has(key); });
