@@ -170,20 +170,42 @@ function initApp(){
   buildRarityDropdown();
 
   // ===================== Prix (utilisation des services) =====================
-  function annotateRowsWithPrices(slug, arr){
-    const setId = getSetIdFromSlug(slug);
-    if(!setId) return;
-    const items = peekPriceCache(setId);
-    if(items){
-      arr.forEach(r=>{
-        const num = baseNumber(r);
-        const p = choosePrice(items[num], r);
-        if(p!=null) r['Prix'] = eur(Number(p));
-      });
-      return;
-    }
-    getSetPrices(setId).then(()=>{ try{ render(); }catch{} });
-  }
+function annotateRowsWithPrices(slug, arr){
+  const setIdMain = getSetIdFromSlug(slug);
+  const setIdGG   = getSetIdFromSlug(`${slug}-gg`);
+  const setIdTG   = getSetIdFromSlug(`${slug}-tg`);
+
+  // charge les pools nécessaires (cache + lazy ok)
+  Promise.all([
+    setIdMain ? getSetPrices(setIdMain) : Promise.resolve(null),
+    setIdGG   ? getSetPrices(setIdGG)   : Promise.resolve(null),
+    setIdTG   ? getSetPrices(setIdTG)   : Promise.resolve(null),
+  ]).then(([poolMain, poolGG, poolTG])=>{
+    arr.forEach(r=>{
+      const numRaw = String(r['Numéro']||'').toUpperCase().trim();
+      const isGG = /^GG\d+/.test(numRaw);
+      const isTG = /^TG\d+/.test(numRaw);
+      const pool = isGG ? poolGG : isTG ? poolTG : poolMain;
+      if(!pool) return;
+
+      // clé possible: "GG05"/"TG01" ou index numérique
+      const idxNum = parseInt(numRaw.replace(/^(?:GG|TG)/,''), 10);
+      const key1 = numRaw;                 // "GG05" / "TG01" / "14/198"
+      const key2 = String(idxNum);         // "5" / "1"
+      const key3 = String(baseNumber(r));  // "14" si "14/198", etc.
+
+      const entry = pool[key1] ?? pool[key2] ?? pool[key3];
+      if(!entry) return;
+
+      // GG/TG = prix normal
+      const p = priceFromEntry(entry, 'normal');
+      if(p>0) r['Prix'] = eur(p);
+    });
+
+    try { render(); } catch {}
+  }).catch(()=>{ /* silence */ });
+}
+
 
   // Helpers prix par variante
   function priceFromEntry(entry, variant){
