@@ -184,11 +184,17 @@ function initApp(){
     const setIdGG   = getSetIdFromSlug(`${slug}-gg`);
     const setIdTG   = getSetIdFromSlug(`${slug}-tg`);
 
-    const [itemsMain, itemsGG, itemsTG] = await Promise.all([
+    const [dMain, dGG, dTG] = await Promise.all([
       setIdMain ? getSetPrices(setIdMain) : Promise.resolve(null),
       setIdGG   ? getSetPrices(setIdGG)   : Promise.resolve(null),
       setIdTG   ? getSetPrices(setIdTG)   : Promise.resolve(null),
     ]);
+    
+    // accepte soit {items:{...}} soit directement {...}
+    const unwrap = (x)=> (x && x.items) ? x.items : x;
+    const itemsMain = unwrap(dMain) || null;
+    const itemsGG   = unwrap(dGG)   || null;
+    const itemsTG   = unwrap(dTG)   || null;
 
     const isGG = s => /^GG\d+/i.test(String(s||'').trim());
     const isTG = s => /^TG\d+/i.test(String(s||'').trim());
@@ -341,11 +347,16 @@ function initApp(){
 
     if (!setIdMain && !setIdGG && !setIdTG) return { available:false };
 
-    const [itemsMain, itemsGG, itemsTG] = await Promise.all([
+    const [dMain, dGG, dTG] = await Promise.all([
       setIdMain ? getSetPrices(setIdMain) : Promise.resolve(null),
       setIdGG   ? getSetPrices(setIdGG)   : Promise.resolve(null),
       setIdTG   ? getSetPrices(setIdTG)   : Promise.resolve(null),
     ]);
+    
+    const unwrap = (x)=> (x && x.items) ? x.items : x;
+    const itemsMain = unwrap(dMain) || null;
+    const itemsGG   = unwrap(dGG)   || null;
+    const itemsTG   = unwrap(dTG)   || null;
 
     const rows = CARDS.filter(r => slugify(r['Série']) === slug);
 
