@@ -175,38 +175,62 @@ function initApp(){
 
   buildRarityDropdown();
 
-  // ===================== Prix (utilisation des services) =====================
-  // >>>>> NOUVELLE VERSION (batch + GG/TG) <<<<<
-  function annotateRowsWithPrices(slug, arr){
-    const idMain = getSetIdFromSlug(slug);
-    const idGG   = getSetIdFromSlug(`${slug}-gg`);
-    const idTG   = getSetIdFromSlug(`${slug}-tg`);
+// ===================== Prix (utilisation des services) =====================
+function annotateRowsWithPrices(slug, arr){
+  // 1) Trouve les setId potentiels pour cette série
+  const setIdMain = getSetIdFromSlug(slug);
+  const setIdGG   = getSetIdFromSlug(`${slug}-gg`);
+  const setIdTG   = getSetIdFromSlug(`${slug}-tg`);
 
-    const promises = [];
-    if (idMain) promises.push(getSetPrices(idMain).then(items => ({kind:'main', items})));
-    if (idGG)   promises.push(getSetPrices(idGG).then(items   => ({kind:'gg',   items})));
-    if (idTG)   promises.push(getSetPrices(idTG).then(items   => ({kind:'tg',   items})));
-    if (!promises.length) return;
+  // 2) Récupère/charge les pools nécessaires (en respectant le cache)
+  const pools = { main:null, gg:null, tg:null };
+  const promises = [];
 
-    Promise.all(promises).then(pools=>{
-      const P = { main:null, gg:null, tg:null };
-      pools.forEach(p => P[p.kind] = p.items);
-
-      arr.forEach(r=>{
-        const numRaw = String(r['Numéro']||'').trim();
-        const idx    = baseNumber(r); // "14/198"→14, "GG05"→5, "TG01"→1
-        let pool = P.main;
-        if (/^GG/i.test(numRaw)) pool = P.gg || P.main;
-        if (/^TG/i.test(numRaw)) pool = P.tg || P.main;
-
-        const entry = pool ? (pool[idx] ?? pool[numRaw] ?? pool[String(idx)] ?? null) : null;
-        const price = choosePrice(entry, r); // GG/TG traitées comme "normales"
-        if (price != null) r['Prix'] = eur(Number(price));
-      });
-
-      scheduleRender(50); // un seul re-render batché
-    }).catch(()=>{ /* non bloquant */ });
+  function need(id, key){
+    if(!id) return;
+    const cached = peekPriceCache(id);
+    if(cached){ pools[key] = cached; return; }
+    promises.push(getSetPrices(id).then(items=>{ pools[key]=items; }));
   }
+  need(setIdMain, 'main');
+  need(setIdGG,   'gg');
+  need(setIdTG,   'tg');
+
+  // Normalise une clé d’index: "14/198"→14, "GG05"→5, "TG1"→1
+  const normIndex = (rawNum)=>{
+    const raw = String(rawNum ?? '').trim().toUpperCase();
+    const mDen = raw.match(/^(\d+)\/\d+$/); if(mDen) return parseInt(mDen[1],10);
+    const mGG  = raw.match(/^(?:GG|TG)?0*(\d+)$/); if(mGG) return parseInt(mGG[1],10);
+    const n = parseInt(raw,10); return Number.isFinite(n) ? n : raw;
+  };
+
+  function apply(){
+    arr.forEach(r=>{
+      const numRaw = String(r['Numéro']||'').trim().toUpperCase();
+      // 3) Choix du pool par carte
+      let pool = pools.main;
+      if(/^GG/.test(numRaw) && pools.gg) pool = pools.gg;
+      else if(/^TG/.test(numRaw) && pools.tg) pool = pools.tg;
+
+      if(!pool) return; // rien à faire si le pool n’est pas dispo
+
+      const idx = normIndex(numRaw);
+      // 4) Essaie plusieurs clés (certains JSON indexent 1..N, d’autres gardent la chaîne)
+      const entry = pool[idx] ?? pool[numRaw] ?? pool[String(idx)] ?? null;
+
+      const p = choosePrice(entry, r);
+      if(p != null) r['Prix'] = eur(Number(p));
+    });
+  }
+
+  if(promises.length){
+    Promise.all(promises).then(()=>{ apply(); try{ render(); }catch{}; })
+      .catch(()=>{ /* silencieux */ });
+  } else {
+    apply();
+  }
+}
+
 
   // Helpers prix par variante (utilisés côté stats si besoin)
   function priceFromEntry(entry, variant){
