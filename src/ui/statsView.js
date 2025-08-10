@@ -4,9 +4,9 @@ import { eur } from '../domain/pricing.js';
 /**
  * Monte la vue Stats dans #stats-root
  * @param {Object} deps
- * @param {HTMLElement} deps.root
- * @param {Array} deps.series              // retour de computeStatsPerSeries()
- * @param {Function} deps.loadPrices       // (slug)=>Promise<priceStats>
+ * @param {HTMLElement} deps.root - conteneur
+ * @param {Array} deps.series - retour de computeStatsPerSeries()
+ * @param {Function} deps.loadPrices - (slug)=>Promise<priceStats> (computePriceStatsForSeries)
  */
 export function mountStatsView({ root, series, loadPrices }) {
   if (!root) return;
@@ -15,10 +15,93 @@ export function mountStatsView({ root, series, loadPrices }) {
     return;
   }
 
-  // Accès facile aux données brutes par slug (pour copier / exporter)
-  const bySlug = new Map(series.map(s => [s.slug, s]));
+  root.innerHTML = series.map(s => renderSeriesBlock(s)).join('');
 
-  root.innerHTML = series.map(s => `
+  // === DÉLÉGATION D’ÉVÉNEMENTS (1 seul listener pour tout) ===
+  root.addEventListener('click', async (e) => {
+    const head = e.target.closest('.s-head');
+    if (head) {
+      const row = head.closest('.series');
+      if (!row) return;
+
+      // ferme les autres séries
+      root.querySelectorAll('.series.open').forEach(r => { if (r !== row) r.classList.remove('open'); });
+      row.classList.toggle('open');
+
+      // charge les prix au premier open
+      if (row.classList.contains('open')) {
+        await ensurePricesLoaded({ root, row, loadPrices });
+      }
+      return;
+    }
+
+    // Manquantes : filtres (N/R/A)
+    const missBtn = e.target.closest('[data-miss]');
+    if (missBtn) {
+      const row = missBtn.closest('.series');
+      const slug = row?.dataset.slug;
+      const scope = missBtn.dataset.miss; // 'n' | 'r' | 'a'
+      if (!slug || !scope) return;
+
+      // état actif visuel
+      missBtn.parentElement.querySelectorAll('[data-miss]').forEach(b => b.removeAttribute('aria-pressed'));
+      missBtn.setAttribute('aria-pressed', 'true');
+
+      // masque/affiche les listes
+      ['n', 'r', 'a'].forEach(k => {
+        const box = root.querySelector(`#miss-${k}-${slug}`);
+        if (box) box.hidden = (k !== scope);
+      });
+
+      // mémorise l’onglet courant (utile pour copier/exporter)
+      row.dataset.missScope = scope;
+      return;
+    }
+
+    // Actions
+    const actBtn = e.target.closest('[data-action]');
+    if (actBtn) {
+      const row = actBtn.closest('.series');
+      if (!row) return;
+      const slug = row.dataset.slug;
+      const scope = row.dataset.missScope || 'a'; // défaut: onglet Alternatives
+
+      if (actBtn.dataset.action === 'copy') {
+        const items = readMissingForScope(root, slug, scope);
+        const text = items.map(x => `${x.numero} • ${x.nom}`).join('\n') || '';
+        await copyToClipboard(text);
+        actBtn.disabled = true;
+        setTimeout(() => (actBtn.disabled = false), 800);
+        return;
+      }
+      if (actBtn.dataset.action === 'csv') {
+        const items = readMissingForScope(root, slug, scope);
+        const csv = buildCsv(items);
+        downloadBlob(csv, `manquantes_${slug}_${scope}.csv`, 'text/csv;charset=utf-8;');
+        actBtn.disabled = true;
+        setTimeout(() => (actBtn.disabled = false), 800);
+        return;
+      }
+    }
+
+    // Tuile valeur -> met à jour le donut
+    const tile = e.target.closest('.tile[data-view]');
+    if (tile) {
+      const row = tile.closest('.series');
+      if (!row) return;
+      row.querySelectorAll('.tile[data-view]').forEach(x => x.removeAttribute('aria-current'));
+      tile.setAttribute('aria-current', 'true');
+      const key = tile.dataset.view;
+      updateDonutFor(row, key);
+      return;
+    }
+  });
+}
+
+/* ===================== RENDER ===================== */
+
+function renderSeriesBlock(s) {
+  return `
     <div class="series" data-slug="${s.slug}">
       <div class="s-head" role="button">
         <div class="s-title">${s.label}</div>
@@ -44,13 +127,13 @@ export function mountStatsView({ root, series, loadPrices }) {
               <h3>Manquantes</h3>
               <div class="content">
                 <div class="toolbar">
-                  <button class="btn" data-miss="n" aria-pressed="true">Normales (${s.missN.length})</button>
+                  <button class="btn" data-miss="n">Normales (${s.missN.length})</button>
                   <button class="btn" data-miss="r">Reverse (${s.missR.length})</button>
-                  <button class="btn" data-miss="a">Alternatives (${s.missAlt.length})</button>
+                  <button class="btn" data-miss="a" aria-pressed="true">Alternatives (${s.missAlt.length})</button>
                 </div>
-                <div class="chips" id="miss-n-${s.slug}">${renderChips(s.missN)}</div>
+                <div class="chips" id="miss-a-${s.slug}">${renderChips(s.missAlt)}</div>
+                <div class="chips" id="miss-n-${s.slug}" hidden>${renderChips(s.missN)}</div>
                 <div class="chips" id="miss-r-${s.slug}" hidden>${renderChips(s.missR)}</div>
-                <div class="chips" id="miss-a-${s.slug}" hidden>${renderChips(s.missAlt)}</div>
               </div>
             </div>
 
@@ -109,10 +192,10 @@ export function mountStatsView({ root, series, loadPrices }) {
               <h3>Actions</h3>
               <div class="content">
                 <div class="toolbar">
-                  <button class="btn" data-action="copy" data-scope="n">Copier la liste manquantes</button>
-                  <button class="btn" data-action="csv" data-scope="n">Exporter CSV</button>
+                  <button class="btn" data-action="copy">Copier la liste manquantes</button>
+                  <button class="btn" data-action="csv">Exporter CSV</button>
+                  <div class="hint">Astuce : le scope (N/R/Alt) suit l’onglet « Manquantes » sélectionné.</div>
                 </div>
-                <div class="hint">Astuce : le scope (N/R/Alt) suit l’onglet « Manquantes » sélectionné.</div>
               </div>
             </div>
 
@@ -120,163 +203,137 @@ export function mountStatsView({ root, series, loadPrices }) {
         </div>
       </div>
     </div>
-  `).join('');
+  `;
+}
 
-  // ---------- Interactions (un seul listener par zone) ----------
+/* ===================== HELPERS ===================== */
 
-  // 1) Accordeon : ouvrir une série ferme les autres
-  root.querySelectorAll('.series .s-head').forEach(head=>{
-    head.addEventListener('click', ()=>{
-      const row = head.parentElement;
-      const willOpen = !row.classList.contains('open');
-      // ferme les autres
-      root.querySelectorAll('.series.open').forEach(x=>{ if(x!==row) x.classList.remove('open'); });
-      // (lazy) charge prix au premier open
-      row.classList.toggle('open');
-      if (willOpen) loadPriceBlock(row);
-    });
-  });
+function renderChips(arr) {
+  if (!arr || !arr.length) return '<span class="muted">—</span>';
+  return arr.map(m => `<span class="pill pill--sm">${m.numero ? `${m.numero} • ${m.nom}` : `${m}`}</span>`).join('');
+}
 
-  // 2) Onglets Manquantes (délégation par série)
-  root.querySelectorAll('.series .card.missing .toolbar').forEach(tb=>{
-    tb.addEventListener('click', (e)=>{
-      const btn = e.target.closest('[data-miss]'); if(!btn) return;
-      const row  = btn.closest('.series'); const slug = row.dataset.slug;
-      tb.querySelectorAll('[data-miss]').forEach(x=>x.removeAttribute('aria-pressed'));
-      btn.setAttribute('aria-pressed','true');
+function setTileValues(root, slug, key, vals) {
+  const id = (s) => root.querySelector(`#${s}-${slug}`);
+  const fmt = (n) => eur(n || 0);
+  id(`v-${key}`).textContent   = fmt(vals.total);
+  id(`v-${key}-n`).textContent = fmt(vals.normal);
+  id(`v-${key}-r`).textContent = fmt(vals.reverse);
+  id(`v-${key}-a`).textContent = fmt(vals.alt);
+}
 
-      const g = btn.dataset.miss; // 'n' | 'r' | 'a'
-      // show/hide lists
-      ['n','r','a'].forEach(k=>{
-        const box = row.querySelector(`#miss-${k}-${slug}`);
-        if (box) box.hidden = (k !== g);
-      });
-      // propager le scope aux boutons d'action
-      row.querySelectorAll('.card.actions [data-action]').forEach(b=> b.dataset.scope = g);
-    });
-  });
+function updateDonut(root, slug, values) {
+  const svg = root.querySelector(`#dn-${slug}`);
+  if (!svg) return;
+  const total = Math.max(1, (values.normal || 0) + (values.reverse || 0) + (values.alt || 0));
+  const n = (values.normal || 0) / total * 100;
+  const r = (values.reverse || 0) / total * 100;
+  const a = (values.alt || 0) / total * 100;
+  const segN = svg.querySelector('.seg-n');
+  const segR = svg.querySelector('.seg-r');
+  const segA = svg.querySelector('.seg-a');
+  segN.setAttribute('stroke-dasharray', `${n} ${100 - n}`);
+  segR.setAttribute('stroke-dasharray', `${r} ${100 - r}`);
+  segA.setAttribute('stroke-dasharray', `${a} ${100 - a}`);
+  segR.setAttribute('stroke-dashoffset', 25 - n);
+  segA.setAttribute('stroke-dashoffset', 25 - n - r);
 
-  // 3) Actions (copie / CSV) — une seule fois par série
-  root.querySelectorAll('.series .card.actions .toolbar').forEach(tb=>{
-    tb.addEventListener('click', async (e)=>{
-      const btn = e.target.closest('[data-action]'); if(!btn) return;
-      const row = btn.closest('.series'); const slug = row.dataset.slug;
-      const scope = btn.dataset.scope || 'n';
-      const s = bySlug.get(slug);
-      const list = scope==='r' ? s.missR : scope==='a' ? s.missAlt : s.missN;
+  const setTxt = (k, v) => {
+    const el = root.querySelector(`#dl-${k}-${slug}`);
+    if (el) el.textContent = `${v.toFixed(0)}%`;
+  };
+  setTxt('n', n); setTxt('r', r); setTxt('a', a);
+}
 
-      if (btn.dataset.action === 'copy') {
-        const text = list.map(m => `${m.numero};${m.nom}`).join('\n') || '';
-        try {
-          await navigator.clipboard.writeText(text);
-          btn.textContent = 'Copié !';
-          setTimeout(()=>{ btn.textContent = 'Copier la liste manquantes'; }, 1200);
-        } catch (err) {
-          console.error('Clipboard error', err);
-          alert('Impossible de copier (presse-papier bloqué par le navigateur).');
-        }
-      }
+function updateDonutFor(row, key) {
+  const slug = row.dataset.slug;
+  const SU = row._priceStats?.setUnique;
+  const OU = row._priceStats?.ownedUnique;
+  const OD = row._priceStats?.setDoubles;
+  const label = row.querySelector(`#dn-label-${slug}`);
+  if (!SU) return;
+  const values = key === 'ownU' ? OU : key === 'ownD' ? OD : SU;
+  const txt = key === 'ownU' ? 'Possédé (unique)' : key === 'ownD' ? 'Possédé (doublons)' : 'Set unique';
+  updateDonut(row, slug, values);
+  if (label) label.textContent = `Répartition — ${txt}`;
+}
 
-      if (btn.dataset.action === 'csv') {
-        const rows = [['Numero','Nom'], ...list.map(m => [m.numero, m.nom])];
-        const csv = rows.map(r => r.map(escapeCSV).join(',')).join('\n');
-        const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `manquantes_${slug}_${scope}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 0);
-      }
-    });
-  });
+async function ensurePricesLoaded({ root, row, loadPrices }) {
+  const slug = row.dataset.slug;
+  if (row.dataset.priceLoaded === '1') return;
 
-  // 4) Valeur : click tuile => met à jour donut
-  root.querySelectorAll('.series').forEach(row=>{
-    row.addEventListener('click', (e)=>{
-      const tile = e.target.closest('.tile[data-view]'); if(!tile) return;
-      const slug = row.dataset.slug;
-      row.querySelectorAll('.tile[data-view]').forEach(x=>x.removeAttribute('aria-current'));
-      tile.setAttribute('aria-current','true');
-      const store = row._priceStore;
-      if(!store) return;
-      const key = tile.dataset.view; // set | ownU | ownD
-      const data = key==='ownU' ? store.OU : key==='ownD' ? store.OD : store.SU;
-      updateDonut(slug, data);
-      const lab = row.querySelector(`#dn-label-${slug}`); if(lab) lab.textContent = `Répartition — ${tile.dataset.label || key}`;
-    });
-  });
-
-  // ---------- Helpers ----------
-
-  function renderChips(arr){
-    if(!arr || !arr.length) return '<span class="muted">—</span>';
-    return arr.map(m=>`<span class="pill pill--sm">${m.numero} • ${m.nom}</span>`).join('');
-  }
-
-  function setTileValues(slug, key, vals){
-    const id = (s)=>document.getElementById(`${s}-${slug}`);
-    const fmt = (n)=> eur(n||0);
-    id(`v-${key}`).textContent      = fmt(vals.total);
-    id(`v-${key}-n`).textContent    = fmt(vals.normal);
-    id(`v-${key}-r`).textContent    = fmt(vals.reverse);
-    id(`v-${key}-a`).textContent    = fmt(vals.alt);
-  }
-
-  function updateDonut(slug, values){
-    const svg = document.getElementById(`dn-${slug}`);
-    if(!svg) return;
-    const total = Math.max(1,(values.normal||0)+(values.reverse||0)+(values.alt||0));
-    const n = (values.normal||0)/total*100;
-    const r = (values.reverse||0)/total*100;
-    const a = (values.alt||0)/total*100;
-    const segN = svg.querySelector('.seg-n');
-    const segR = svg.querySelector('.seg-r');
-    const segA = svg.querySelector('.seg-a');
-    segN.setAttribute('stroke-dasharray', `${n} ${100-n}`);
-    segR.setAttribute('stroke-dasharray', `${r} ${100-r}`);
-    segA.setAttribute('stroke-dasharray', `${a} ${100-a}`);
-    segR.setAttribute('stroke-dashoffset', 25 - n);
-    segA.setAttribute('stroke-dashoffset', 25 - n - r);
-    // mini-legend
-    const setTxt = (k,v)=>{ const el = document.getElementById(`dl-${k}-${slug}`); if(el) el.textContent = `${v.toFixed(0)}%`; };
-    setTxt('n',n); setTxt('r',r); setTxt('a',a);
-  }
-
-  function escapeCSV(val){
-    const s = String(val ?? '');
-    if (/[",\n;]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
-    return s;
-  }
-
-  // charge les prix pour une série à l'ouverture
-  async function loadPriceBlock(row){
-    if (row._priceLoaded) return;
-    row._priceLoaded = true;
-    const slug = row.dataset.slug;
-
-    try{
-      const res = await loadPrices(slug);
-      if (!res || !res.available) return;
-
-      // valeurs
-      const SU = res.setUnique, OU = res.ownedUnique, OD = res.setDoubles;
-      setTileValues(slug, 'set',  SU);
-      setTileValues(slug, 'ownU', OU);
-      setTileValues(slug, 'ownD', OD);
-
-      // memorise pour le donut et les tuiles
-      row._priceStore = { SU, OU, OD };
-      updateDonut(slug, SU);
-
-      // top
-      const list = row.querySelector('#top-'+slug);
-      if(list){
-        const html = (res.top10 || []).map(x=>`<span class="pill pill--sm">${x.numero} • ${x.nom} — ${eur(x.price)}</span>`).join('');
-        list.innerHTML = html || '<span class="muted">—</span>';
-      }
-    }catch(err){
-      console.error('loadPrices error', err);
+  row.dataset.priceLoaded = '1';
+  try {
+    const res = await loadPrices(slug);
+    if (!res || !res.available) {
+      // pas de mapping de prix : on laisse le contenu à « — »
+      const topBox = row.querySelector('#top-' + slug);
+      if (topBox) topBox.innerHTML = '<span class="muted">Aucun prix disponible pour cette série.</span>';
+      return;
     }
+
+    // stocke les valeurs sur le noeud (évite de re-requêter)
+    row._priceStats = res;
+
+    // valeurs
+    const SU = res.setUnique, OU = res.ownedUnique, OD = res.setDoubles;
+    setTileValues(row, slug, 'set',  SU);
+    setTileValues(row, slug, 'ownU', OU);
+    setTileValues(row, slug, 'ownD', OD);
+
+    // donut par défaut = set unique
+    updateDonut(row, slug, SU);
+
+    // top 10
+    const list = row.querySelector('#top-' + slug);
+    if (list) {
+      const html = (res.top10 || []).map(x =>
+        `<span class="pill pill--sm">${x.numero} • ${x.nom} — ${eur(x.price)}</span>`
+      ).join('');
+      list.innerHTML = html || '<span class="muted">—</span>';
+    }
+  } catch (err) {
+    console.error('loadPrices error', err);
+    row.dataset.priceLoaded = '0'; // autorise un 2e essai
+  }
+}
+
+function readMissingForScope(root, slug, scope /* 'n'|'r'|'a' */) {
+  const box = root.querySelector(`#miss-${scope}-${slug}`);
+  if (!box) return [];
+  // chaque badge est "NN/NNN • Nom"
+  const items = Array.from(box.querySelectorAll('.pill')).map(el => {
+    const txt = el.textContent.trim();
+    const [numero, nom] = txt.split('•').map(s => s.trim());
+    return { numero: numero || '', nom: nom || '' };
+  });
+  return items;
+}
+
+function buildCsv(items) {
+  const rows = [['Numéro', 'Nom'], ...items.map(i => [i.numero, i.nom])];
+  return rows.map(row => row.map(escapeCsv).join(',')).join('\n');
+}
+function escapeCsv(s) {
+  const v = String(s ?? '');
+  return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+}
+function downloadBlob(text, filename, type) {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } finally { ta.remove(); }
   }
 }
