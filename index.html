@@ -142,8 +142,8 @@
           <select id="view">
             <option value="owned">Possédées</option>
             <option value="missing">Manquantes (normales)</option>
-            <option value="missing_reverse">Manquantes (reverse)</option>
-            <option value="missing_special">Manquantes (alternatives)</option>
+            <option value="missing_rev">Manquantes (reverse)</option>
+            <option value="missing_alt">Manquantes (alternatives)</option>
             <option value="all">Toutes</option>
           </select>
         </div>
@@ -278,7 +278,8 @@
       RARITY_ORDER.forEach(key=>{
         const id = 'rk_'+key;
         const wrap = document.createElement('span'); wrap.className='chip';
-        const input = document.createElement('input'); input.type='checkbox'; input.id=id; input.checked=true; input.dataset.key=key;
+        theInput = document.createElement('input'); const input=theInput;
+        input.type='checkbox'; input.id=id; input.checked=true; input.dataset.key=key;
         const label = document.createElement('label'); label.setAttribute('for', id); label.innerHTML = rarityIconsByKey(key); label.title = RARITY_LABELS[key];
         wrap.appendChild(input); wrap.appendChild(label); box.appendChild(wrap);
         input.addEventListener('change', ()=>{ if(input.checked) selectedRarities.add(key); else selectedRarities.delete(key); updateRarityBtn(); render(); });
@@ -459,63 +460,51 @@
 
         const nbN = Number(r['Nb Normal']);
         const nbR = Number(r['Nb Reverse']);
-        const nbS = Number(r['Nb Spéciale']);      // nb d’alternatives possédées
-        const alt = Number(r['Alternative'] ?? -1); // -1 pas d’alternative, 1 = existe
-        const grad = Number(r['Gradées'] ?? 0);     // 2=PCA, 4=PSA
+        const nbS = Number(r['Nb Spéciale']);
+        const alt = Number(r['Alternative'] ?? -1);
+        const grad = Number(r['Gradées'] ?? 0);
 
         if(!map.has(slug)){
           map.set(slug, {
             slug,
             label: SERIE_CANON.get(slug) || normalize(r['Série']),
-            // comptages de taille (basés sur le nombre réel de cartes normales + sous-ensembles)
-            sizeN: 0,
-            sizeSub: 0,
-            // totaux par version
+            sizeN: 0, sizeSub: 0,
             totN: 0, totR: 0,
-            // alternatives
             totAlt: 0, ownedAlt: 0, missAlt: [],
-            // gradées
             gradedTotal: 0, gradedPCA: 0, gradedPSA: 0,
-            // possession / manquantes
             ownedN: 0, ownedR: 0,
             missN: [], missR: []
           });
         }
         const o = map.get(slug);
 
-        // Déterminer si c’est une carte normale (x/y) ou un sous-ensemble (GGxx, TGxx…)
         const numStr = String(r['Numéro']||'').trim();
         const isNumDen = /^\d+\s*\/\s*\d+$/i.test(numStr);
         const isSubset = /^[A-Za-z]+\s*0*?\d{1,3}$/i.test(numStr);
 
-        // ---- Taille : on compte les cartes qui existent (Nb Normal != -1)
         if (nbN !== -1) {
           if (isNumDen) o.sizeN += 1;
           else if (isSubset) o.sizeSub += 1;
         }
 
-        // ---- Normales
         if (nbN !== -1) {
           o.totN += 1;
           if (nbN > 0) o.ownedN += 1;
           else o.missN.push({numero: numStr || '—', nom: String(r['Nom']||'')});
         }
 
-        // ---- Reverse
         if (nbR !== -1) {
           o.totR += 1;
           if (nbR > 0) o.ownedR += 1;
           else o.missR.push({numero: numStr || '—', nom: String(r['Nom']||'')});
         }
 
-        // ---- Alternatives (nouvelle logique)
         if (alt === 1) {
           o.totAlt += 1;
           if (nbS > 0) o.ownedAlt += 1;
           else o.missAlt.push({numero: numStr || '—', nom: String(r['Nom']||'')});
         }
 
-        // ---- Gradées
         if (grad === 2 || grad === 4) {
           o.gradedTotal += 1;
           if (grad === 2) o.gradedPCA += 1;
@@ -524,8 +513,8 @@
       });
 
       const arr = Array.from(map.values()).map(o=>{
-        const sizeTotal = o.sizeN + o.sizeSub;      // -> “taille du set” réelle
-        const done = Math.min(o.ownedN, sizeTotal); // sécurité anti-dépassement
+        const sizeTotal = o.sizeN + o.sizeSub;
+        const done = Math.min(o.ownedN, sizeTotal);
         const pct = sizeTotal ? (done / sizeTotal) * 100 : 0;
         return {...o, size: sizeTotal, done, completion: pct};
       });
@@ -600,28 +589,39 @@
           rows=rows.filter(r=>['Nom','Numéro','Série'].some(k=>String(r[k]||'').toLowerCase().includes(qq)));
         }
 
-        // Vue (possédées / manquantes / variantes)
+        // === Vue (possédées / manquantes / etc.)
         const mode = document.getElementById('view').value;
+        const num = (v) => {
+          const n = Number(String(v ?? '').replace(',', '.'));
+          return Number.isNaN(n) ? 0 : n;
+        };
+        const altExists = (r) => {
+          const flag = Number(r['Alternative']);
+          const nbS = num(r['Nb Spéciale']);
+          return flag === 1 || (!Number.isNaN(nbS) && nbS !== -1);
+        };
+
         if (mode === 'owned') {
           rows = rows.filter(r =>
-            (Number(r['Nb Normal']) > 0) ||
-            (Number(r['Nb Reverse']) > 0) ||
-            (Number(r['Nb Spéciale']) > 0) ||
-            (Number(r['Nb Ed1']) > 0)
+            num(r['Nb Normal']) > 0 ||
+            num(r['Nb Reverse']) > 0 ||
+            num(r['Nb Spéciale']) > 0 ||
+            num(r['Nb Ed1']) > 0
           );
         } else if (mode === 'missing') {
-          rows = rows.filter(r => (Number(r['Nb Normal']) <= 0));
-        } else if (mode === 'missing_reverse') {
           rows = rows.filter(r => {
-            const n = Number(r['Nb Reverse']);
+            const n = num(r['Nb Normal']);
             return n !== -1 && n <= 0;
           });
-        } else if (mode === 'missing_special') {
+        } else if (mode === 'missing_rev') {
           rows = rows.filter(r => {
-            const n = Number(r['Nb Spéciale']);
+            const n = num(r['Nb Reverse']);
             return n !== -1 && n <= 0;
           });
+        } else if (mode === 'missing_alt') {
+          rows = rows.filter(r => altExists(r) && num(r['Nb Spéciale']) <= 0);
         }
+        // else 'all' => pas de filtre
 
         // Raretés cochées
         rows=rows.filter(r=>{ const {key}=rarityFromRow(r); return !key || selectedRarities.has(key); });
