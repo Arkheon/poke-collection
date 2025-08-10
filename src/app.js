@@ -184,6 +184,8 @@ function initApp(){
     const setIdGG   = getSetIdFromSlug(`${slug}-gg`);
     const setIdTG   = getSetIdFromSlug(`${slug}-tg`);
 
+
+    
     const [dMain, dGG, dTG] = await Promise.all([
       setIdMain ? getSetPrices(setIdMain) : Promise.resolve(null),
       setIdGG   ? getSetPrices(setIdGG)   : Promise.resolve(null),
@@ -196,6 +198,9 @@ function initApp(){
     const itemsGG   = unwrap(dGG)   || null;
     const itemsTG   = unwrap(dTG)   || null;
 
+    console.debug('setIds', { setIdMain, setIdGG, setIdTG });
+    console.debug('GG keys sample', (itemsGG && Object.keys(itemsGG).slice(0,5)) || null);
+    
     const isGG = s => /^GG\d+/i.test(String(s||'').trim());
     const isTG = s => /^TG\d+/i.test(String(s||'').trim());
 
