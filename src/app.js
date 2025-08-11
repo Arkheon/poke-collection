@@ -392,7 +392,7 @@ function initApp(){
     const sum = {
       setU : { normal:0, reverse:0, alt:0 },
       ownU : { normal:0, reverse:0, alt:0 },
-      ownD : { normal:0, reverse:0, alt:0 },
+      ownD : { normal:0, reverse:0, alt:0 }, // "doublons seuls" (extra copies)
     };
     const topAll = [];
 
@@ -414,14 +414,17 @@ function initApp(){
       if (hasR)   sum.setU.reverse += priceR;
       if (hasAlt) sum.setU.alt     += priceA;
 
-      const qN = posInt(r['Nb Normal'])  + (isGG(r['Numéro']) || isTG(r['Numéro']) ? 1 : 0);
+      // Quantités possédées (Ed1 est purement informatif -> non pris en compte)
+      const qN = posInt(r['Nb Normal']); // pas d'ajout artificiel pour GG/TG
       const qR = hasR   ? posInt(r['Nb Reverse']) : 0;
       const qA = hasAlt ? posInt(r['Nb Spéciale'] ?? r['Nb Speciale']) : 0;
 
+      // Valeur "unique" (1er exemplaire)
       if (qN > 0) sum.ownU.normal  += priceN;
       if (qR > 0) sum.ownU.reverse += priceR;
       if (qA > 0) sum.ownU.alt     += priceA;
 
+      // Valeur "doublons seuls" (2e, 3e, … exemplaires)
       sum.ownD.normal  += Math.max(0, qN - 1) * priceN;
       sum.ownD.reverse += Math.max(0, qR - 1) * priceR;
       sum.ownD.alt     += Math.max(0, qA - 1) * priceA;
@@ -430,6 +433,14 @@ function initApp(){
     }
 
     const withTotal = (o)=> ({ ...o, total:o.normal + o.reverse + o.alt });
+
+    // Total possédé = unique + doublons (ce que tu veux pour la 3e tuile)
+    const ownTotal = {
+      normal:  sum.ownU.normal  + sum.ownD.normal,
+      reverse: sum.ownU.reverse + sum.ownD.reverse,
+      alt:     sum.ownU.alt     + sum.ownD.alt,
+    };
+
     topAll.sort((a,b)=> b.price - a.price);
 
     const anyAvailable = !!(itemsMain || itemsGG || itemsTG);
@@ -438,7 +449,10 @@ function initApp(){
       setId: mainId || ggId || tgId || null,
       setUnique:   withTotal(sum.setU),
       ownedUnique: withTotal(sum.ownU),
-      setDoubles:  withTotal(sum.ownD),
+      // 3e tuile : valeur totale possédée (unique + doublons)
+      setDoubles:  withTotal(ownTotal),
+      // (optionnel) expose aussi les doublons seuls si utile ailleurs :
+      ownedDoublesOnly: withTotal(sum.ownD),
       top10: topAll.slice(0,10)
     };
   }
@@ -514,7 +528,7 @@ function initApp(){
   }
 
   function ownedQty(r){
-    const keys=["Nb Normal","Nb Reverse","Nb Spéciale","Quantité","Qty"];
+    const keys=["Nb Normal","Nb Reverse","Nb Spéciale","Quantité","Qty"]; // Ed1 est informatif -> exclu
     return keys.map(k=>{ const n=Number(r[k]); return Number.isNaN(n)?0:Math.max(0,n); }).reduce((a,b)=>a+b,0);
   }
   function sortCardNumbers(a,b){
@@ -570,7 +584,7 @@ function initApp(){
         const sp = Number(r['Nb Spéciale']);
         const alt = Number(r['Alternative']);
         switch (mode) {
-          case 'owned':           return (n>0) || (rv>0) || (sp>0) || (Number(r['Nb Ed1'])>0);
+          case 'owned':           return (n>0) || (rv>0) || (sp>0); // Ed1 retiré (informatif)
           case 'missing':         return (n !== -1) && (n <= 0);
           case 'missing_reverse': return (rv !== -1) && (rv <= 0);
           case 'missing_alt':     return (alt === 1) && (sp <= 0);
