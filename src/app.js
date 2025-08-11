@@ -105,24 +105,32 @@ function updateRarityBtn(){
   else rarityBtn.textContent=`${selectedRarities.size} rareté(s) sélectionnée(s)`;
 }
 
-// remplace tout ton `if(rarityBtn){ ... }` par ceci :
-if (rarityBtn && rarityDD) {
-  // état initial
-  rarityDD.hidden = true;
-  rarityBtn.setAttribute('aria-expanded', 'false');
+/* Rebranche proprement le dropdown de raretés (idempotent) */
+function wireRarityDropdown(){
+  const btn = document.getElementById('rarityBtn');
+  const dd  = document.getElementById('rarityDD');
+  if(!btn || !dd) return;
 
-  const toggle = (open) => {
-    const willOpen = (open ?? rarityDD.hidden);
-    rarityDD.hidden = !willOpen;
-    rarityBtn.setAttribute('aria-expanded', String(willOpen));
+  if (btn._rarityWired) return;        // évite les doublons si render() relance le câblage
+  btn._rarityWired = true;
+
+  const toggle = (e)=>{ e.stopPropagation(); dd.hidden = !dd.hidden; };
+  const stop   = (e)=>{ e.stopPropagation(); };
+  const close  = (e)=>{
+    // ferme si clic hors du bouton/panneau
+    if (!dd.hidden && !e.target.closest('#rarityDD') && !e.target.closest('#rarityBtn')) {
+      dd.hidden = true;
+    }
   };
 
-  rarityBtn.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
-  rarityDD.addEventListener('click', (e) => e.stopPropagation());
-  document.addEventListener('click', (e) => {
-    if (!rarityDD.hidden && !e.target.closest('.multi')) toggle(false);
-  });
+  btn.addEventListener('click', toggle);
+  dd.addEventListener('click', stop);
+  document.addEventListener('click', close);
 }
+
+// appelle une fois au démarrage (et tu peux le rappeler dans render() si besoin)
+wireRarityDropdown();
+
 
 
   // ===================== Données =====================
