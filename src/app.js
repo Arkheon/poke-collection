@@ -176,77 +176,73 @@ function initApp(){
 
   buildRarityDropdown();
 
-// Essaye de charger un setId sans jeter d'erreur si le JSON n'existe pas
-async function safeGet(setId){
-  try { return setId ? await getSetPrices(setId) : null; }
-  catch { return null; }
-}
-  
-  // charge les prix pour la série + sous-sets (GG/TG) puis annote le tableau
-async function annotateRowsWithPrices(slug, arr){
-  await loadFrMap();
-
-  const mainId0 = getSetIdFromSlug(slug);
-  let   ggId0   = getSetIdFromSlug(`${slug}-gg`);
-  let   tgId0   = getSetIdFromSlug(`${slug}-tg`);
-
-  // Fallbacks si la map ne renvoie rien pour -gg / -tg
-  const mainId = mainId0 || null;
-  const ggId   = ggId0 || (mainId ? `${mainId}gg` : null);
-  const tgId   = tgId0 || (mainId ? `${mainId}tg` : null);
-
-  const [dMain, dGG, dTG] = await Promise.all([
-    safeGet(mainId),
-    safeGet(ggId),
-    safeGet(tgId),
-  ]);
-
-  // Accepte soit { items:{...} } soit {...}
+  // === helpers prix ===
+  async function safeGet(setId){
+    try { return setId ? await getSetPrices(setId) : null; }
+    catch { return null; }
+  }
   const unwrap = (x)=> (x && x.items) ? x.items : x;
-  const itemsMain = unwrap(dMain) || null;
-  const itemsGG   = unwrap(dGG)   || null;
-  const itemsTG   = unwrap(dTG)   || null;
 
-  console.debug('setIds', { mainId, ggId, tgId });
-  console.debug('GG keys sample', (itemsGG && Object.keys(itemsGG).slice(0,5)) || null);
+  // charge les prix pour la série + sous-sets (GG/TG) puis annote le tableau
+  async function annotateRowsWithPrices(slug, arr){
+    await loadFrMap();
 
-  const isGG = s => /^GG\d+/i.test(String(s||'').trim());
-  const isTG = s => /^TG\d+/i.test(String(s||'').trim());
+    const mainId0 = getSetIdFromSlug(slug);
+    let   ggId0   = getSetIdFromSlug(`${slug}-gg`);
+    let   tgId0   = getSetIdFromSlug(`${slug}-tg`);
 
-  const normIndex = raw => {
-    const s = String(raw ?? '').trim();
-    const m1 = s.match(/^(\d+)\/\d+$/);         if (m1) return parseInt(m1[1],10);
-    const m2 = s.match(/^(?:GG|TG)?0*(\d+)$/i); if (m2) return parseInt(m2[1],10);
-    const n  = parseInt(s,10);                  return Number.isFinite(n) ? n : s.toUpperCase();
-  };
+    // fallbacks
+    const mainId = mainId0 || null;
+    const ggId   = ggId0 || (mainId ? `${mainId}gg` : null);
+    const tgId   = tgId0 || (mainId ? `${mainId}tg` : null);
 
-  const lookup = num => {
-    const raw  = String(num||'').trim().toUpperCase();
-    const pool = isGG(raw) ? itemsGG : isTG(raw) ? itemsTG : itemsMain;
-    if (!pool) return null;
-    const k = normIndex(raw);
-    return pool[raw] ?? pool[k] ?? pool[String(k)] ?? null;
-  };
+    const [dMain, dGG, dTG] = await Promise.all([
+      safeGet(mainId),
+      safeGet(ggId),
+      safeGet(tgId),
+    ]);
 
-  let changed = false;
-  arr.forEach(r=>{
-    const raw = String(r['Numéro']||'').toUpperCase();
-    const entry = lookup(raw);
-    if (!entry) return;
+    const itemsMain = unwrap(dMain) || null;
+    const itemsGG   = unwrap(dGG)   || null;
+    const itemsTG   = unwrap(dTG)   || null;
 
-    const price = (/^(GG|TG)/i.test(raw))
-      ? priceFromEntry(entry, 'normal') // GG/TG = toujours “normal”
-      : choosePrice(entry, r);
+    const isGG = s => /^GG\d+/i.test(String(s||'').trim());
+    const isTG = s => /^TG\d+/i.test(String(s||'').trim());
 
-    if (price != null) {
-      const euro = eur(Number(price));
-      if (r['Prix'] !== euro) { r['Prix'] = euro; changed = true; }
-    }
-  });
+    // "14/198" -> 14, "GG05"/"TG01" -> 5, sinon la clé brute
+    const normIndex = raw => {
+      const s = String(raw ?? '').trim();
+      const m1 = s.match(/^(\d+)\/\d+$/);         if (m1) return parseInt(m1[1],10);
+      const m2 = s.match(/^(?:GG|TG)?0*(\d+)$/i); if (m2) return parseInt(m2[1],10);
+      const n  = parseInt(s,10);                  return Number.isFinite(n) ? n : s.toUpperCase();
+    };
 
-  if (changed) scheduleRender(30);
-}
+    const lookup = num => {
+      const raw  = String(num||'').trim().toUpperCase();
+      const pool = isGG(raw) ? itemsGG : isTG(raw) ? itemsTG : itemsMain;
+      if (!pool) return null;
+      const k = normIndex(raw);
+      return pool[raw] ?? pool[k] ?? pool[String(k)] ?? null;
+    };
 
+    let changed = false;
+    arr.forEach(r=>{
+      const raw = String(r['Numéro']||'').toUpperCase();
+      const entry = lookup(raw);
+      if (!entry) return;
+
+      const price = (/^(GG|TG)/i.test(raw))
+        ? priceFromEntry(entry, 'normal') // GG/TG = toujours “normal”
+        : choosePrice(entry, r);
+
+      if (price != null) {
+        const euro = eur(Number(price));
+        if (r['Prix'] !== euro) { r['Prix'] = euro; changed = true; }
+      }
+    });
+
+    if (changed) scheduleRender(30);
+  }
 
   // Helpers prix par variante (utilisés côté stats si besoin)
   function priceFromEntry(entry, variant){
@@ -349,19 +345,23 @@ async function annotateRowsWithPrices(slug, arr){
   async function computePriceStatsForSeries(slug){
     await loadFrMap();
 
-    const setIdMain = getSetIdFromSlug(slug);
-    const setIdGG   = getSetIdFromSlug(`${slug}-gg`); // ex. swsh12pt5gg
-    const setIdTG   = getSetIdFromSlug(`${slug}-tg`); // ex. swsh12tg
+    // même logique de fallback que côté liste
+    const mainId0 = getSetIdFromSlug(slug);
+    let   ggId0   = getSetIdFromSlug(`${slug}-gg`); // ex. zenith-supreme-gg
+    let   tgId0   = getSetIdFromSlug(`${slug}-tg`); // ex. tempete-argentee-tg
 
-    if (!setIdMain && !setIdGG && !setIdTG) return { available:false };
+    const mainId = mainId0 || null;
+    const ggId   = ggId0 || (mainId ? `${mainId}gg` : null); // fallback: swsh12pt5 -> swsh12pt5gg
+    const tgId   = tgId0 || (mainId ? `${mainId}tg` : null); // fallback: swsh12 -> swsh12tg
+
+    if (!mainId && !ggId && !tgId) return { available:false };
 
     const [dMain, dGG, dTG] = await Promise.all([
-      setIdMain ? getSetPrices(setIdMain) : Promise.resolve(null),
-      setIdGG   ? getSetPrices(setIdGG)   : Promise.resolve(null),
-      setIdTG   ? getSetPrices(setIdTG)   : Promise.resolve(null),
+      safeGet(mainId),
+      safeGet(ggId),
+      safeGet(tgId),
     ]);
-    
-    const unwrap = (x)=> (x && x.items) ? x.items : x;
+
     const itemsMain = unwrap(dMain) || null;
     const itemsGG   = unwrap(dGG)   || null;
     const itemsTG   = unwrap(dTG)   || null;
@@ -388,7 +388,6 @@ async function annotateRowsWithPrices(slug, arr){
 
     const pNorm = (e)=> Number(e?.trend ?? e?.avg30 ?? e?.avg7 ?? e?.low ?? 0) || 0;
     const pRev  = (e)=> Number(e?.reverseTrend ?? 0) || pNorm(e);
-    const posInt = (v)=>{ const n=Number(String(v??'').replace(',','.')); return Number.isFinite(n)? Math.max(0, n):0; };
 
     const sum = {
       setU : { normal:0, reverse:0, alt:0 },
@@ -401,11 +400,13 @@ async function annotateRowsWithPrices(slug, arr){
       const entry = lookup(r['Numéro']);
       if (!entry) continue;
 
+      // présence des variantes
       const hasN   = Number(r['Nb Normal'])  !== -1 || isGG(r['Numéro']) || isTG(r['Numéro']);
       const hasR   = Number(r['Nb Reverse']) !== -1;
       const hasAlt = Number(r['Alternative']) === 1;
 
-      const priceN = pNorm(entry); // GG/TG comptent en "Normal"
+      // GG/TG -> on les compte dans "normal"
+      const priceN = pNorm(entry);
       const priceR = pRev(entry);
       const priceA = pRev(entry) || pNorm(entry); // Alt fallback
 
@@ -413,7 +414,7 @@ async function annotateRowsWithPrices(slug, arr){
       if (hasR)   sum.setU.reverse += priceR;
       if (hasAlt) sum.setU.alt     += priceA;
 
-      const qN = posInt(r['Nb Normal']) + posInt(r['Nb Ed1']);
+      const qN = posInt(r['Nb Normal']) + posInt(r['Nb Ed1']) + (isGG(r['Numéro']) || isTG(r['Numéro']) ? 1 : 0);
       const qR = hasR   ? posInt(r['Nb Reverse']) : 0;
       const qA = hasAlt ? posInt(r['Nb Spéciale'] ?? r['Nb Speciale']) : 0;
 
@@ -434,7 +435,7 @@ async function annotateRowsWithPrices(slug, arr){
     const anyAvailable = !!(itemsMain || itemsGG || itemsTG);
     return {
       available: anyAvailable,
-      setId: setIdMain || setIdGG || setIdTG || null,
+      setId: mainId || ggId || tgId || null,
       setUnique:   withTotal(sum.setU),
       ownedUnique: withTotal(sum.ownU),
       setDoubles:  withTotal(sum.ownD),
