@@ -206,66 +206,73 @@ wireRarityDropdown();
   }
   const unwrap = (x)=> (x && x.items) ? x.items : x;
 
-  // charge les prix pour la série + sous-sets (GG/TG) puis annote le tableau
-  async function annotateRowsWithPrices(slug, arr){
-    await loadFrMap();
+// charge les prix pour la série + sous-sets (GG/TG/SV) puis annote le tableau
+async function annotateRowsWithPrices(slug, arr){
+  await loadFrMap();
 
-    const mainId0 = getSetIdFromSlug(slug);
-    let   ggId0   = getSetIdFromSlug(`${slug}-gg`);
-    let   tgId0   = getSetIdFromSlug(`${slug}-tg`);
+  const mainId0 = getSetIdFromSlug(slug);
+  let ggId0 = getSetIdFromSlug(`${slug}-gg`);
+  let tgId0 = getSetIdFromSlug(`${slug}-tg`);
+  let svId0 = getSetIdFromSlug(`${slug}-sv`);
 
-    // fallbacks
-    const mainId = mainId0 || null;
-    const ggId   = ggId0 || (mainId ? `${mainId}gg` : null);
-    const tgId   = tgId0 || (mainId ? `${mainId}tg` : null);
+  // fallbacks si la map ne renvoie rien pour -gg / -tg / -sv
+  const mainId = mainId0 || null;
+  const ggId   = ggId0 || (mainId ? `${mainId}gg` : null);
+  const tgId   = tgId0 || (mainId ? `${mainId}tg` : null);
+  const svId   = svId0 || (mainId ? `${mainId}sv` : null);
 
-    const [dMain, dGG, dTG] = await Promise.all([
-      safeGet(mainId),
-      safeGet(ggId),
-      safeGet(tgId),
-    ]);
+  const [dMain, dGG, dTG, dSV] = await Promise.all([
+    safeGet(mainId),
+    safeGet(ggId),
+    safeGet(tgId),
+    safeGet(svId),
+  ]);
 
-    const itemsMain = unwrap(dMain) || null;
-    const itemsGG   = unwrap(dGG)   || null;
-    const itemsTG   = unwrap(dTG)   || null;
+  const itemsMain = unwrap(dMain) || null;
+  const itemsGG   = unwrap(dGG)   || null;
+  const itemsTG   = unwrap(dTG)   || null;
+  const itemsSV   = unwrap(dSV)   || null;
 
-    const isGG = s => /^GG\d+/i.test(String(s||'').trim());
-    const isTG = s => /^TG\d+/i.test(String(s||'').trim());
+  const isGG = s => /^GG\d+/i.test(String(s||'').trim());
+  const isTG = s => /^TG\d+/i.test(String(s||'').trim());
+  const isSV = s => /^SV\d+/i.test(String(s||'').trim());
 
-    // "14/198" -> 14, "GG05"/"TG01" -> 5, sinon la clé brute
-    const normIndex = raw => {
-      const s = String(raw ?? '').trim();
-      const m1 = s.match(/^(\d+)\/\d+$/);         if (m1) return parseInt(m1[1],10);
-      const m2 = s.match(/^(?:GG|TG)?0*(\d+)$/i); if (m2) return parseInt(m2[1],10);
-      const n  = parseInt(s,10);                  return Number.isFinite(n) ? n : s.toUpperCase();
-    };
+  // "14/198" -> 14, "GG05"/"TG01"/"SV22" -> 5/1/22, sinon la clé brute
+  const normIndex = raw => {
+    const s = String(raw ?? '').trim();
+    const m1 = s.match(/^(\d+)\/\d+$/);              if (m1) return parseInt(m1[1],10);
+    const m2 = s.match(/^(?:GG|TG|SV)?0*(\d+)$/i);   if (m2) return parseInt(m2[1],10);
+    const n  = parseInt(s,10);                       return Number.isFinite(n) ? n : s.toUpperCase();
+  };
 
-    const lookup = num => {
-      const raw  = String(num||'').trim().toUpperCase();
-      const pool = isGG(raw) ? itemsGG : isTG(raw) ? itemsTG : itemsMain;
-      if (!pool) return null;
-      const k = normIndex(raw);
-      return pool[raw] ?? pool[k] ?? pool[String(k)] ?? null;
-    };
+  const lookup = num => {
+    const raw  = String(num||'').trim().toUpperCase();
+    const pool = isGG(raw) ? itemsGG : isTG(raw) ? itemsTG : isSV(raw) ? itemsSV : itemsMain;
+    if (!pool) return null;
+    const k = normIndex(raw);
+    return pool[raw] ?? pool[k] ?? pool[String(k)] ?? null;
+  };
 
-    let changed = false;
-    arr.forEach(r=>{
-      const raw = String(r['Numéro']||'').toUpperCase();
-      const entry = lookup(raw);
-      if (!entry) return;
+  let changed = false;
+  arr.forEach(r=>{
+    const raw   = String(r['Numéro']||'').toUpperCase();
+    const entry = lookup(raw);
+    if (!entry) return;
 
-      const price = (/^(GG|TG)/i.test(raw))
-        ? priceFromEntry(entry, 'normal') // GG/TG = toujours “normal”
-        : choosePrice(entry, r);
+    // GG/TG/SV = toujours prix "normal"
+    const price = (/^(GG|TG|SV)/i.test(raw))
+      ? priceFromEntry(entry, 'normal')
+      : choosePrice(entry, r);
 
-      if (price != null) {
-        const euro = eur(Number(price));
-        if (r['Prix'] !== euro) { r['Prix'] = euro; changed = true; }
-      }
-    });
+    if (price != null) {
+      const euro = eur(Number(price));
+      if (r['Prix'] !== euro) { r['Prix'] = euro; changed = true; }
+    }
+  });
 
-    if (changed) scheduleRender(30);
-  }
+  if (changed) scheduleRender(30);
+}
+
 
   // Helpers prix par variante (utilisés côté stats si besoin)
   function priceFromEntry(entry, variant){
@@ -321,7 +328,8 @@ wireRarityDropdown();
 
       const numStr = String(r['Numéro']||'').trim();
       const isNumDen = !!parseNumDen(numStr);
-      const isSubset = !!parseSubset(numStr);
+      //const isSubset = !!parseSubset(numStr);
+      const isSubset = !!parseSubset(numStr) || /^SV\d+/i.test(numStr);
 
       if (nbN !== -1) {
         if (isNumDen) o.sizeN += 1;
@@ -365,120 +373,112 @@ wireRarityDropdown();
   }
 
   // ===== Valeur / Top 10 par série (gère GG/TG) =====
-  async function computePriceStatsForSeries(slug){
-    await loadFrMap();
+ // ===== Valeur / Top 10 par série (gère GG/TG/SV) =====
+async function computePriceStatsForSeries(slug){
+  await loadFrMap();
 
-    // même logique de fallback que côté liste
-    const mainId0 = getSetIdFromSlug(slug);
-    let   ggId0   = getSetIdFromSlug(`${slug}-gg`); // ex. zenith-supreme-gg
-    let   tgId0   = getSetIdFromSlug(`${slug}-tg`); // ex. tempete-argentee-tg
+  const mainId0 = getSetIdFromSlug(slug);
+  let ggId0 = getSetIdFromSlug(`${slug}-gg`);
+  let tgId0 = getSetIdFromSlug(`${slug}-tg`);
+  let svId0 = getSetIdFromSlug(`${slug}-sv`);
 
-    const mainId = mainId0 || null;
-    const ggId   = ggId0 || (mainId ? `${mainId}gg` : null); // fallback: swsh12pt5 -> swsh12pt5gg
-    const tgId   = tgId0 || (mainId ? `${mainId}tg` : null); // fallback: swsh12 -> swsh12tg
+  const mainId = mainId0 || null;
+  const ggId   = ggId0 || (mainId ? `${mainId}gg` : null);
+  const tgId   = tgId0 || (mainId ? `${mainId}tg` : null);
+  const svId   = svId0 || (mainId ? `${mainId}sv` : null);
 
-    if (!mainId && !ggId && !tgId) return { available:false };
+  if (!mainId && !ggId && !tgId && !svId) return { available:false };
 
-    const [dMain, dGG, dTG] = await Promise.all([
-      safeGet(mainId),
-      safeGet(ggId),
-      safeGet(tgId),
-    ]);
+  const [dMain, dGG, dTG, dSV] = await Promise.all([
+    safeGet(mainId),
+    safeGet(ggId),
+    safeGet(tgId),
+    safeGet(svId),
+  ]);
 
-    const itemsMain = unwrap(dMain) || null;
-    const itemsGG   = unwrap(dGG)   || null;
-    const itemsTG   = unwrap(dTG)   || null;
+  const itemsMain = unwrap(dMain) || null;
+  const itemsGG   = unwrap(dGG)   || null;
+  const itemsTG   = unwrap(dTG)   || null;
+  const itemsSV   = unwrap(dSV)   || null;
 
-    const rows = CARDS.filter(r => slugify(r['Série']) === slug);
+  const rows = CARDS.filter(r => slugify(r['Série']) === slug);
 
-    const isGG = (s)=> /^GG\d+/i.test(String(s||'').trim());
-    const isTG = (s)=> /^TG\d+/i.test(String(s||'').trim());
+  const isGG = (s)=> /^GG\d+/i.test(String(s||'').trim());
+  const isTG = (s)=> /^TG\d+/i.test(String(s||'').trim());
+  const isSV = (s)=> /^SV\d+/i.test(String(s||'').trim());
 
-    const normIndex = (num)=>{
-      const raw = String(num ?? '').trim();
-      const den = raw.match(/^(\d+)\/\d+$/); if (den) return parseInt(den[1],10);
-      const gg  = raw.match(/^(?:GG|TG)?0*(\d+)$/i); if (gg) return parseInt(gg[1],10);
-      const n   = parseInt(raw,10); return Number.isFinite(n) ? n : raw;
-    };
+  const normIndex = (num)=>{
+    const raw = String(num ?? '').trim();
+    const den = raw.match(/^(\d+)\/\d+$/);            if (den) return parseInt(den[1],10);
+    const gg  = raw.match(/^(?:GG|TG|SV)?0*(\d+)$/i); if (gg)  return parseInt(gg[1],10);
+    const n   = parseInt(raw,10);                     return Number.isFinite(n) ? n : raw;
+  };
 
-    const lookup = (num)=>{
-      const raw = String(num||'').trim().toUpperCase();
-      const pool = isGG(raw) ? itemsGG : isTG(raw) ? itemsTG : itemsMain;
-      if (!pool) return null;
-      const idx = normIndex(raw);
-      return pool[idx] ?? pool[raw] ?? pool[String(idx)] ?? null;
-    };
+  const lookup = (num)=>{
+    const raw = String(num||'').trim().toUpperCase();
+    const pool = isGG(raw) ? itemsGG : isTG(raw) ? itemsTG : isSV(raw) ? itemsSV : itemsMain;
+    if (!pool) return null;
+    const idx = normIndex(raw);
+    return pool[idx] ?? pool[raw] ?? pool[String(idx)] ?? null;
+  };
 
-    const pNorm = (e)=> Number(e?.trend ?? e?.avg30 ?? e?.avg7 ?? e?.low ?? 0) || 0;
-    const pRev  = (e)=> Number(e?.reverseTrend ?? 0) || pNorm(e);
+  const pNorm = (e)=> Number(e?.trend ?? e?.avg30 ?? e?.avg7 ?? e?.low ?? 0) || 0;
+  const pRev  = (e)=> Number(e?.reverseTrend ?? 0) || pNorm(e);
 
-    const sum = {
-      setU : { normal:0, reverse:0, alt:0 },
-      ownU : { normal:0, reverse:0, alt:0 },
-      ownD : { normal:0, reverse:0, alt:0 }, // "doublons seuls" (extra copies)
-    };
-    const topAll = [];
+  const sum = {
+    setU : { normal:0, reverse:0, alt:0 },
+    ownU : { normal:0, reverse:0, alt:0 },
+    ownD : { normal:0, reverse:0, alt:0 },
+  };
+  const topAll = [];
 
-    for (const r of rows){
-      const entry = lookup(r['Numéro']);
-      if (!entry) continue;
+  for (const r of rows){
+    const entry = lookup(r['Numéro']);
+    if (!entry) continue;
 
-      // présence des variantes
-      const hasN   = Number(r['Nb Normal'])  !== -1 || isGG(r['Numéro']) || isTG(r['Numéro']);
-      const hasR   = Number(r['Nb Reverse']) !== -1;
-      const hasAlt = Number(r['Alternative']) === 1;
+    // présence des variantes
+    const hasN   = Number(r['Nb Normal']) !== -1 || isGG(r['Numéro']) || isTG(r['Numéro']) || isSV(r['Numéro']);
+    const hasR   = Number(r['Nb Reverse']) !== -1;
+    const hasAlt = Number(r['Alternative']) === 1;
 
-      // GG/TG -> on les compte dans "normal"
-      const priceN = pNorm(entry);
-      const priceR = pRev(entry);
-      const priceA = pRev(entry) || pNorm(entry); // Alt fallback
+    // GG/TG/SV -> comptés dans "normal"
+    const priceN = pNorm(entry);
+    const priceR = pRev(entry);
+    const priceA = pRev(entry) || pNorm(entry); // Alt fallback
 
-      if (hasN)   sum.setU.normal  += priceN;
-      if (hasR)   sum.setU.reverse += priceR;
-      if (hasAlt) sum.setU.alt     += priceA;
+    if (hasN)   sum.setU.normal  += priceN;
+    if (hasR)   sum.setU.reverse += priceR;
+    if (hasAlt) sum.setU.alt     += priceA;
 
-      // Quantités possédées (Ed1 est purement informatif -> non pris en compte)
-      const qN = posInt(r['Nb Normal']); // pas d'ajout artificiel pour GG/TG
-      const qR = hasR   ? posInt(r['Nb Reverse']) : 0;
-      const qA = hasAlt ? posInt(r['Nb Spéciale'] ?? r['Nb Speciale']) : 0;
+    const qN = posInt(r['Nb Normal']) + (isGG(r['Numéro']) || isTG(r['Numéro']) || isSV(r['Numéro']) ? 1 : 0);
+    const qR = hasR   ? posInt(r['Nb Reverse']) : 0;
+    const qA = hasAlt ? posInt(r['Nb Spéciale'] ?? r['Nb Speciale']) : 0;
 
-      // Valeur "unique" (1er exemplaire)
-      if (qN > 0) sum.ownU.normal  += priceN;
-      if (qR > 0) sum.ownU.reverse += priceR;
-      if (qA > 0) sum.ownU.alt     += priceA;
+    if (qN > 0) sum.ownU.normal  += priceN;
+    if (qR > 0) sum.ownU.reverse += priceR;
+    if (qA > 0) sum.ownU.alt     += priceA;
 
-      // Valeur "doublons seuls" (2e, 3e, … exemplaires)
-      sum.ownD.normal  += Math.max(0, qN - 1) * priceN;
-      sum.ownD.reverse += Math.max(0, qR - 1) * priceR;
-      sum.ownD.alt     += Math.max(0, qA - 1) * priceA;
+    sum.ownD.normal  += Math.max(0, qN - 1) * priceN;
+    sum.ownD.reverse += Math.max(0, qR - 1) * priceR;
+    sum.ownD.alt     += Math.max(0, qA - 1) * priceA;
 
-      topAll.push({ numero:String(r['Numéro']||'—'), nom:String(r['Nom']||''), price:priceN });
-    }
-
-    const withTotal = (o)=> ({ ...o, total:o.normal + o.reverse + o.alt });
-
-    // Total possédé = unique + doublons (ce que tu veux pour la 3e tuile)
-    const ownTotal = {
-      normal:  sum.ownU.normal  + sum.ownD.normal,
-      reverse: sum.ownU.reverse + sum.ownD.reverse,
-      alt:     sum.ownU.alt     + sum.ownD.alt,
-    };
-
-    topAll.sort((a,b)=> b.price - a.price);
-
-    const anyAvailable = !!(itemsMain || itemsGG || itemsTG);
-    return {
-      available: anyAvailable,
-      setId: mainId || ggId || tgId || null,
-      setUnique:   withTotal(sum.setU),
-      ownedUnique: withTotal(sum.ownU),
-      // 3e tuile : valeur totale possédée (unique + doublons)
-      setDoubles:  withTotal(ownTotal),
-      // (optionnel) expose aussi les doublons seuls si utile ailleurs :
-      ownedDoublesOnly: withTotal(sum.ownD),
-      top10: topAll.slice(0,10)
-    };
+    topAll.push({ numero:String(r['Numéro']||'—'), nom:String(r['Nom']||''), price:priceN });
   }
+
+  const withTotal = (o)=> ({ ...o, total:o.normal + o.reverse + o.alt });
+  topAll.sort((a,b)=> b.price - a.price);
+
+  const anyAvailable = !!(itemsMain || itemsGG || itemsTG || itemsSV);
+  return {
+    available: anyAvailable,
+    setId: mainId || ggId || tgId || svId || null,
+    setUnique:   withTotal(sum.setU),
+    ownedUnique: withTotal(sum.ownU),
+    setDoubles:  withTotal(sum.ownD),
+    top10: topAll.slice(0,10)
+  };
+}
+
 
   function renderStats(){
     const root = document.getElementById('stats-root');
