@@ -98,17 +98,32 @@ function initApp(){
     document.getElementById('uncheckAll').onclick=()=>{ RARITY_ORDER.forEach(k=>{selectedRarities.delete(k); const el=document.getElementById('rk_'+k); if(el) el.checked=false;}); updateRarityBtn(); render(); };
     updateRarityBtn();
   }
-  function updateRarityBtn(){
-    if(!rarityBtn) return;
-    if(selectedRarities.size===RARITY_ORDER.length) rarityBtn.textContent='Toutes les raretés';
-    else if(selectedRarities.size===0) rarityBtn.textContent='Aucune sélection';
-    else rarityBtn.textContent=`${selectedRarities.size} rareté(s) sélectionnée(s)`;
-  }
-  if(rarityBtn){
-    rarityBtn.addEventListener('click', (e) => { e.stopPropagation(); rarityDD.hidden = !rarityDD.hidden; });
-    rarityDD.addEventListener('click', (e) => { e.stopPropagation(); });
-    document.addEventListener('click', (e) => { if (!rarityDD.hidden && !e.target.closest('.multi')) { rarityDD.hidden = true; } });
-  }
+function updateRarityBtn(){
+  if(!rarityBtn) return;
+  if(selectedRarities.size===RARITY_ORDER.length) rarityBtn.textContent='Toutes les raretés';
+  else if(selectedRarities.size===0) rarityBtn.textContent='Aucune sélection';
+  else rarityBtn.textContent=`${selectedRarities.size} rareté(s) sélectionnée(s)`;
+}
+
+// remplace tout ton `if(rarityBtn){ ... }` par ceci :
+if (rarityBtn && rarityDD) {
+  // état initial
+  rarityDD.hidden = true;
+  rarityBtn.setAttribute('aria-expanded', 'false');
+
+  const toggle = (open) => {
+    const willOpen = (open ?? rarityDD.hidden);
+    rarityDD.hidden = !willOpen;
+    rarityBtn.setAttribute('aria-expanded', String(willOpen));
+  };
+
+  rarityBtn.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
+  rarityDD.addEventListener('click', (e) => e.stopPropagation());
+  document.addEventListener('click', (e) => {
+    if (!rarityDD.hidden && !e.target.closest('.multi')) toggle(false);
+  });
+}
+
 
   // ===================== Données =====================
   let CARDS=[], SEALED=[], GRADED=[];
