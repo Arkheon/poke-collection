@@ -414,7 +414,7 @@ function initApp(){
       if (hasR)   sum.setU.reverse += priceR;
       if (hasAlt) sum.setU.alt     += priceA;
 
-      const qN = posInt(r['Nb Normal']) + posInt(r['Nb Ed1']) + (isGG(r['Numéro']) || isTG(r['Numéro']) ? 1 : 0);
+      const qN = posInt(r['Nb Normal'])  + (isGG(r['Numéro']) || isTG(r['Numéro']) ? 1 : 0);
       const qR = hasR   ? posInt(r['Nb Reverse']) : 0;
       const qA = hasAlt ? posInt(r['Nb Spéciale'] ?? r['Nb Speciale']) : 0;
 
@@ -422,9 +422,9 @@ function initApp(){
       if (qR > 0) sum.ownU.reverse += priceR;
       if (qA > 0) sum.ownU.alt     += priceA;
 
-      sum.ownD.normal  += qN * priceN;
-      sum.ownD.reverse += qR * priceR;
-      sum.ownD.alt     += qA * priceA;
+      sum.ownD.normal  += Math.max(0, qN - 1) * priceN;
+      sum.ownD.reverse += Math.max(0, qR - 1) * priceR;
+      sum.ownD.alt     += Math.max(0, qA - 1) * priceA;
 
       topAll.push({ numero:String(r['Numéro']||'—'), nom:String(r['Nom']||''), price:priceN });
     }
@@ -514,7 +514,7 @@ function initApp(){
   }
 
   function ownedQty(r){
-    const keys=["Nb Normal","Nb Ed1","Nb Reverse","Nb Spéciale","Quantité","Qty"];
+    const keys=["Nb Normal","Nb Reverse","Nb Spéciale","Quantité","Qty"];
     return keys.map(k=>{ const n=Number(r[k]); return Number.isNaN(n)?0:Math.max(0,n); }).reduce((a,b)=>a+b,0);
   }
   function sortCardNumbers(a,b){
