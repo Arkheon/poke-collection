@@ -98,40 +98,37 @@ function initApp(){
     document.getElementById('uncheckAll').onclick=()=>{ RARITY_ORDER.forEach(k=>{selectedRarities.delete(k); const el=document.getElementById('rk_'+k); if(el) el.checked=false;}); updateRarityBtn(); render(); };
     updateRarityBtn();
   }
-function updateRarityBtn(){
-  if(!rarityBtn) return;
-  if(selectedRarities.size===RARITY_ORDER.length) rarityBtn.textContent='Toutes les raretés';
-  else if(selectedRarities.size===0) rarityBtn.textContent='Aucune sélection';
-  else rarityBtn.textContent=`${selectedRarities.size} rareté(s) sélectionnée(s)`;
-}
+  function updateRarityBtn(){
+    if(!rarityBtn) return;
+    if(selectedRarities.size===RARITY_ORDER.length) rarityBtn.textContent='Toutes les raretés';
+    else if(selectedRarities.size===0) rarityBtn.textContent='Aucune sélection';
+    else rarityBtn.textContent=`${selectedRarities.size} rareté(s) sélectionnée(s)`;
+  }
 
-/* Rebranche proprement le dropdown de raretés (idempotent) */
-function wireRarityDropdown(){
-  const btn = document.getElementById('rarityBtn');
-  const dd  = document.getElementById('rarityDD');
-  if(!btn || !dd) return;
+  /* Rebranche proprement le dropdown de raretés (idempotent) */
+  function wireRarityDropdown(){
+    const btn = document.getElementById('rarityBtn');
+    const dd  = document.getElementById('rarityDD');
+    if(!btn || !dd) return;
 
-  if (btn._rarityWired) return;        // évite les doublons si render() relance le câblage
-  btn._rarityWired = true;
+    if (btn._rarityWired) return; // évite les doublons si render() relance le câblage
+    btn._rarityWired = true;
 
-  const toggle = (e)=>{ e.stopPropagation(); dd.hidden = !dd.hidden; };
-  const stop   = (e)=>{ e.stopPropagation(); };
-  const close  = (e)=>{
-    // ferme si clic hors du bouton/panneau
-    if (!dd.hidden && !e.target.closest('#rarityDD') && !e.target.closest('#rarityBtn')) {
-      dd.hidden = true;
-    }
-  };
+    const toggle = (e)=>{ e.stopPropagation(); dd.hidden = !dd.hidden; };
+    const stop   = (e)=>{ e.stopPropagation(); };
+    const close  = (e)=>{
+      // ferme si clic hors du bouton/panneau
+      if (!dd.hidden && !e.target.closest('#rarityDD') && !e.target.closest('#rarityBtn')) {
+        dd.hidden = true;
+      }
+    };
 
-  btn.addEventListener('click', toggle);
-  dd.addEventListener('click', stop);
-  document.addEventListener('click', close);
-}
-
-// appelle une fois au démarrage (et tu peux le rappeler dans render() si besoin)
-wireRarityDropdown();
-
-
+    btn.addEventListener('click', toggle);
+    dd.addEventListener('click', stop);
+    document.addEventListener('click', close);
+  }
+  // appelle une fois au démarrage (et tu peux le rappeler dans render() si besoin)
+  wireRarityDropdown();
 
   // ===================== Données =====================
   let CARDS=[], SEALED=[], GRADED=[];
@@ -206,68 +203,67 @@ wireRarityDropdown();
   }
   const unwrap = (x)=> (x && x.items) ? x.items : x;
 
-// charge les prix pour la série + sous-sets (GG/TG/SV) puis annote le tableau
-async function annotateRowsWithPrices(slug, arr){
-  await loadFrMap();
+  // charge les prix pour la série + sous-sets (GG/TG/SV) puis annote le tableau
+  async function annotateRowsWithPrices(slug, arr){
+    await loadFrMap();
 
-  const mainId0 = getSetIdFromSlug(slug);
-  const ggId0   = getSetIdFromSlug(`${slug}-gg`);
-  const tgId0   = getSetIdFromSlug(`${slug}-tg`);
-  const svId0   = getSetIdFromSlug(`${slug}-sv`);
+    const mainId0 = getSetIdFromSlug(slug);
+    const ggId0   = getSetIdFromSlug(`${slug}-gg`);
+    const tgId0   = getSetIdFromSlug(`${slug}-tg`);
+    const svId0   = getSetIdFromSlug(`${slug}-sv`);
 
-  const mainId = mainId0 || null;
-  const ggId   = ggId0 || (mainId ? `${mainId}gg` : null);
-  const tgId   = tgId0 || (mainId ? `${mainId}tg` : null);
-  const svId   = svId0 || (mainId ? `${mainId}sv` : null);
+    const mainId = mainId0 || null;
+    const ggId   = ggId0 || (mainId ? `${mainId}gg` : null);
+    const tgId   = tgId0 || (mainId ? `${mainId}tg` : null);
+    const svId   = svId0 || (mainId ? `${mainId}sv` : null);
 
-  const [dMain, dGG, dTG, dSV] = await Promise.all([
-    safeGet(mainId), safeGet(ggId), safeGet(tgId), safeGet(svId),
-  ]);
+    const [dMain, dGG, dTG, dSV] = await Promise.all([
+      safeGet(mainId), safeGet(ggId), safeGet(tgId), safeGet(svId),
+    ]);
 
-  const itemsMain = unwrap(dMain) || null;
-  const itemsGG   = unwrap(dGG)   || null;
-  const itemsTG   = unwrap(dTG)   || null;
-  const itemsSV   = unwrap(dSV)   || null;
+    const itemsMain = unwrap(dMain) || null;
+    const itemsGG   = unwrap(dGG)   || null;
+    const itemsTG   = unwrap(dTG)   || null;
+    const itemsSV   = unwrap(dSV)   || null;
 
-  const isGG = s => /^GG\d+/i.test(String(s||'').trim());
-  const isTG = s => /^TG\d+/i.test(String(s||'').trim());
-  const isSV = s => /^SV\d+/i.test(String(s||'').trim()) || /^SV\d+\/\d+/i.test(String(s||'').trim());
+    const isGG = s => /^GG\d+/i.test(String(s||'').trim());
+    const isTG = s => /^TG\d+/i.test(String(s||'').trim());
+    const isSV = s => /^SV\d+/i.test(String(s||'').trim()) || /^SV\d+\/\d+/i.test(String(s||'').trim());
 
-  const normIndex = raw => {
-    const s = String(raw ?? '').trim().toUpperCase();
-    // ex: "14/198", "SV37/SV122"
-    const mDen = s.match(/^(?:SV)?0*(\d+)\/\d+$/i); if (mDen) return parseInt(mDen[1],10);
-    // ex: "GG05", "TG01", "SV37", "014"
-    const mPre = s.match(/^(?:GG|TG|SV)?0*(\d+)$/i); if (mPre) return parseInt(mPre[1],10);
-    const n = parseInt(s,10); return Number.isFinite(n) ? n : s;
-  };
+    const normIndex = raw => {
+      const s = String(raw ?? '').trim().toUpperCase();
+      // ex: "14/198", "SV37/SV122"
+      const mDen = s.match(/^(?:SV)?0*(\d+)\/\d+$/i); if (mDen) return parseInt(mDen[1],10);
+      // ex: "GG05", "TG01", "SV37", "014"
+      const mPre = s.match(/^(?:GG|TG|SV)?0*(\d+)$/i); if (mPre) return parseInt(mPre[1],10);
+      const n = parseInt(s,10); return Number.isFinite(n) ? n : s;
+    };
 
-  const lookup = num => {
-    const raw  = String(num||'').trim().toUpperCase();
-    const pool = isGG(raw) ? itemsGG : isTG(raw) ? itemsTG : isSV(raw) ? itemsSV : itemsMain;
-    if (!pool) return null;
-    const k = normIndex(raw);
-    return pool[raw] ?? pool[k] ?? pool[String(k)] ?? null;
-  };
+    const lookup = num => {
+      const raw  = String(num||'').trim().toUpperCase();
+      const pool = isGG(raw) ? itemsGG : isTG(raw) ? itemsTG : isSV(raw) ? itemsSV : itemsMain;
+      if (!pool) return null;
+      const k = normIndex(raw);
+      return pool[raw] ?? pool[k] ?? pool[String(k)] ?? null;
+    };
 
-  let changed = false;
-  for (const r of arr){
-    const raw = String(r['Numéro']||'').toUpperCase();
-    const entry = lookup(raw);
-    if (!entry) continue;
+    let changed = false;
+    for (const r of arr){
+      const raw = String(r['Numéro']||'').toUpperCase();
+      const entry = lookup(raw);
+      if (!entry) continue;
 
-    const price = (/^(GG|TG|SV)/i.test(raw))
-      ? priceFromEntry(entry, 'normal') // sous-sets = prix "normal"
-      : choosePrice(entry, r);
+      const price = (/^(GG|TG|SV)/i.test(raw))
+        ? priceFromEntry(entry, 'normal') // sous-sets = prix "normal"
+        : choosePrice(entry, r);
 
-    if (price != null) {
-      const euro = eur(Number(price));
-      if (r['Prix'] !== euro) { r['Prix'] = euro; changed = true; }
+      if (price != null) {
+        const euro = eur(Number(price));
+        if (r['Prix'] !== euro) { r['Prix'] = euro; changed = true; }
+      }
     }
+    if (changed) scheduleRender(30);
   }
-  if (changed) scheduleRender(30);
-}
-
 
   // Helpers prix par variante (utilisés côté stats si besoin)
   function priceFromEntry(entry, variant){
@@ -323,7 +319,7 @@ async function annotateRowsWithPrices(slug, arr){
 
       const numStr = String(r['Numéro']||'').trim();
       const isNumDen = !!parseNumDen(numStr);
-      //const isSubset = !!parseSubset(numStr);
+      // SV comptées comme sous-set (comme GG/TG)
       const isSubset = !!parseSubset(numStr) || /^SV\d+/i.test(numStr);
 
       if (nbN !== -1) {
@@ -367,114 +363,113 @@ async function annotateRowsWithPrices(slug, arr){
     return arr;
   }
 
-  // ===== Valeur / Top 10 par série (gère GG/TG) =====
-async function computePriceStatsForSeries(slug){
-  await loadFrMap();
+  // ===== Valeur / Top 10 par série (gère GG/TG/SV) =====
+  async function computePriceStatsForSeries(slug){
+    await loadFrMap();
 
-  const mainId0 = getSetIdFromSlug(slug);
-  const ggId0   = getSetIdFromSlug(`${slug}-gg`);
-  const tgId0   = getSetIdFromSlug(`${slug}-tg`);
-  const svId0   = getSetIdFromSlug(`${slug}-sv`);
+    const mainId0 = getSetIdFromSlug(slug);
+    const ggId0   = getSetIdFromSlug(`${slug}-gg`);
+    const tgId0   = getSetIdFromSlug(`${slug}-tg`);
+    const svId0   = getSetIdFromSlug(`${slug}-sv`);
 
-  const mainId = mainId0 || null;
-  const ggId   = ggId0 || (mainId ? `${mainId}gg` : null);
-  const tgId   = tgId0 || (mainId ? `${mainId}tg` : null);
-  const svId   = svId0 || (mainId ? `${mainId}sv` : null);
+    const mainId = mainId0 || null;
+    const ggId   = ggId0 || (mainId ? `${mainId}gg` : null);
+    const tgId   = tgId0 || (mainId ? `${mainId}tg` : null);
+    const svId   = svId0 || (mainId ? `${mainId}sv` : null);
 
-  if (!mainId && !ggId && !tgId && !svId) return { available:false };
+    if (!mainId && !ggId && !tgId && !svId) return { available:false };
 
-  const [dMain, dGG, dTG, dSV] = await Promise.all([
-    safeGet(mainId), safeGet(ggId), safeGet(tgId), safeGet(svId),
-  ]);
+    const [dMain, dGG, dTG, dSV] = await Promise.all([
+      safeGet(mainId), safeGet(ggId), safeGet(tgId), safeGet(svId),
+    ]);
 
-  const itemsMain = unwrap(dMain) || null;
-  const itemsGG   = unwrap(dGG)   || null;
-  const itemsTG   = unwrap(dTG)   || null;
-  const itemsSV   = unwrap(dSV)   || null;
+    const itemsMain = unwrap(dMain) || null;
+    const itemsGG   = unwrap(dGG)   || null;
+    const itemsTG   = unwrap(dTG)   || null;
+    const itemsSV   = unwrap(dSV)   || null;
 
-  const rows = CARDS.filter(r => slugify(r['Série']) === slug);
+    const rows = CARDS.filter(r => slugify(r['Série']) === slug);
 
-  const isGG = s => /^GG\d+/i.test(String(s||'').trim());
-  const isTG = s => /^TG\d+/i.test(String(s||'').trim());
-  const isSV = s => /^SV\d+/i.test(String(s||'').trim()) || /^SV\d+\/\d+/i.test(String(s||'').trim());
+    const isGG = s => /^GG\d+/i.test(String(s||'').trim());
+    const isTG = s => /^TG\d+/i.test(String(s||'').trim());
+    const isSV = s => /^SV\d+/i.test(String(s||'').trim()) || /^SV\d+\/\d+/i.test(String(s||'').trim());
 
-  const normIndex = num=>{
-    const s = String(num ?? '').trim().toUpperCase();
-    const mDen = s.match(/^(?:SV)?0*(\d+)\/\d+$/i); if (mDen) return parseInt(mDen[1],10);
-    const mPre = s.match(/^(?:GG|TG|SV)?0*(\d+)$/i); if (mPre) return parseInt(mPre[1],10);
-    const n = parseInt(s,10); return Number.isFinite(n) ? n : s;
-  };
+    const normIndex = num=>{
+      const s = String(num ?? '').trim().toUpperCase();
+      const mDen = s.match(/^(?:SV)?0*(\d+)\/\d+$/i); if (mDen) return parseInt(mDen[1],10);
+      const mPre = s.match(/^(?:GG|TG|SV)?0*(\d+)$/i); if (mPre) return parseInt(mPre[1],10);
+      const n = parseInt(s,10); return Number.isFinite(n) ? n : s;
+    };
 
-  const lookup = num=>{
-    const raw = String(num||'').trim().toUpperCase();
-    const pool = isGG(raw) ? itemsGG : isTG(raw) ? itemsTG : isSV(raw) ? itemsSV : itemsMain;
-    if (!pool) return null;
-    const idx = normIndex(raw);
-    return pool[idx] ?? pool[raw] ?? pool[String(idx)] ?? null;
-  };
+    const lookup = num=>{
+      const raw = String(num||'').trim().toUpperCase();
+      const pool = isGG(raw) ? itemsGG : isTG(raw) ? itemsTG : isSV(raw) ? itemsSV : itemsMain;
+      if (!pool) return null;
+      const idx = normIndex(raw);
+      return pool[idx] ?? pool[raw] ?? pool[String(idx)] ?? null;
+    };
 
-  const pNorm = e => Number(e?.trend ?? e?.avg30 ?? e?.avg7 ?? e?.low ?? 0) || 0;
-  const pRev  = e => Number(e?.reverseTrend ?? 0) || pNorm(e);
+    const pNorm = e => Number(e?.trend ?? e?.avg30 ?? e?.avg7 ?? e?.low ?? 0) || 0;
+    const pRev  = e => Number(e?.reverseTrend ?? 0) || pNorm(e);
 
-  const sum = {
-    setU : { normal:0, reverse:0, alt:0 },
-    ownU : { normal:0, reverse:0, alt:0 },
-    ownD : { normal:0, reverse:0, alt:0 },
-  };
-  const topAll = [];
+    const sum = {
+      setU : { normal:0, reverse:0, alt:0 },
+      ownU : { normal:0, reverse:0, alt:0 },
+      ownD : { normal:0, reverse:0, alt:0 },
+    };
+    const topAll = [];
 
-  for (const r of rows){
-    const numRaw = String(r['Numéro']||'');
-    const entry  = lookup(numRaw);
-    if (!entry) continue;
+    for (const r of rows){
+      const numRaw = String(r['Numéro']||'');
+      const entry  = lookup(numRaw);
+      if (!entry) continue;
 
-    const prefixed = isGG(numRaw) || isTG(numRaw) || isSV(numRaw);
+      const prefixed = isGG(numRaw) || isTG(numRaw) || isSV(numRaw);
 
-    // variantes existantes dans le set
-    const hasN   = Number(r['Nb Normal'])  !== -1 || prefixed;
-    const hasR   = Number(r['Nb Reverse']) !== -1;
-    const hasAlt = Number(r['Alternative']) === 1;
+      // variantes existantes dans le set
+      const hasN   = Number(r['Nb Normal'])  !== -1 || prefixed;
+      const hasR   = Number(r['Nb Reverse']) !== -1;
+      const hasAlt = Number(r['Alternative']) === 1;
 
-    const priceN = pNorm(entry);  // GG/TG/SV => "normal"
-    const priceR = pRev(entry);
-    const priceA = pRev(entry) || pNorm(entry); // fallback
+      const priceN = pNorm(entry);  // GG/TG/SV => "normal"
+      const priceR = pRev(entry);
+      const priceA = pRev(entry) || pNorm(entry); // fallback
 
-    if (hasN)   sum.setU.normal  += priceN;
-    if (hasR)   sum.setU.reverse += priceR;
-    if (hasAlt) sum.setU.alt     += priceA;
+      if (hasN)   sum.setU.normal  += priceN;
+      if (hasR)   sum.setU.reverse += priceR;
+      if (hasAlt) sum.setU.alt     += priceA;
 
-    // quantités réelles dans le CSV
-    const qNraw = posInt(r['Nb Normal']);
-    const qRraw = posInt(r['Nb Reverse']);
-    const qAraw = posInt(r['Nb Spéciale'] ?? r['Nb Speciale']);
+      // quantités réelles dans le CSV
+      const qNraw = posInt(r['Nb Normal']);
+      const qRraw = posInt(r['Nb Reverse']);
+      const qAraw = posInt(r['Nb Spéciale'] ?? r['Nb Speciale']);
 
-    // Possédé (unique) :
-    if (qNraw > 0 || prefixed) sum.ownU.normal  += priceN;  // SV/GG/TG comptés “1” si 0 déclaré
-    if (qRraw > 0)            sum.ownU.reverse += priceR;
-    if (hasAlt && qAraw > 0)  sum.ownU.alt     += priceA;
+      // Possédé (unique) — **uniquement si quantité > 0**
+      if (qNraw > 0)           sum.ownU.normal  += priceN;
+      if (qRraw > 0)           sum.ownU.reverse += priceR;
+      if (hasAlt && qAraw > 0) sum.ownU.alt     += priceA;
 
-    // Possédé (doublons) — uniquement l’excès réel au-delà de 1
-    if (qNraw > 1) sum.ownD.normal  += (qNraw - 1) * priceN;
-    if (qRraw > 1) sum.ownD.reverse += (qRraw - 1) * priceR;
-    if (qAraw > 1) sum.ownD.alt     += (qAraw - 1) * priceA;
+      // Possédé (doublons) — uniquement l’excès réel au-delà de 1
+      if (qNraw > 1) sum.ownD.normal  += (qNraw - 1) * priceN;
+      if (qRraw > 1) sum.ownD.reverse += (qRraw - 1) * priceR;
+      if (qAraw > 1) sum.ownD.alt     += (qAraw - 1) * priceA;
 
-    topAll.push({ numero:String(numRaw||'—'), nom:String(r['Nom']||''), price:priceN });
+      topAll.push({ numero:String(numRaw||'—'), nom:String(r['Nom']||''), price:priceN });
+    }
+
+    const withTotal = o => ({ ...o, total:o.normal + o.reverse + o.alt });
+    topAll.sort((a,b)=> b.price - a.price);
+
+    const anyAvailable = !!(itemsMain || itemsGG || itemsTG || itemsSV);
+    return {
+      available: anyAvailable,
+      setId: mainId || ggId || tgId || svId || null,
+      setUnique:   withTotal(sum.setU),
+      ownedUnique: withTotal(sum.ownU),
+      setDoubles:  withTotal(sum.ownD),
+      top10: topAll.slice(0,10)
+    };
   }
-
-  const withTotal = o => ({ ...o, total:o.normal + o.reverse + o.alt });
-  topAll.sort((a,b)=> b.price - a.price);
-
-  const anyAvailable = !!(itemsMain || itemsGG || itemsTG || itemsSV);
-  return {
-    available: anyAvailable,
-    setId: mainId || ggId || tgId || svId || null,
-    setUnique:   withTotal(sum.setU),
-    ownedUnique: withTotal(sum.ownU),
-    setDoubles:  withTotal(sum.ownD),
-    top10: topAll.slice(0,10)
-  };
-}
-
 
   function renderStats(){
     const root = document.getElementById('stats-root');
@@ -624,7 +619,7 @@ async function computePriceStatsForSeries(slug){
       });
       const groups = Array.from(groupsMap.entries()).sort((a,b)=>{
         const la = SERIE_CANON.get(a[0]) || '';
-        const lb = SERIE_CANON.get(b[0]) || '';
+               const lb = SERIE_CANON.get(b[0]) || '';
         return la.localeCompare(lb,'fr');
       });
 
