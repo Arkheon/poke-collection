@@ -96,3 +96,8 @@
   .missing h4{margin:8px 0 4px 0;font-size:13px;color:var(--muted)}
   .chips-list{display:flex;flex-wrap:wrap;gap:6px}
   .chips-list span{background:#fff;border:1px solid var(--ring);border-radius:999px;padding:4px 8px;font-size:12px}
+
+.multi { position: relative; }
+.multi-panel[hidden] { display: none !important; }
+.multi-panel { z-index: 1000; }
+
