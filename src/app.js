@@ -211,21 +211,17 @@ async function annotateRowsWithPrices(slug, arr){
   await loadFrMap();
 
   const mainId0 = getSetIdFromSlug(slug);
-  let ggId0 = getSetIdFromSlug(`${slug}-gg`);
-  let tgId0 = getSetIdFromSlug(`${slug}-tg`);
-  let svId0 = getSetIdFromSlug(`${slug}-sv`);
+  const ggId0   = getSetIdFromSlug(`${slug}-gg`);
+  const tgId0   = getSetIdFromSlug(`${slug}-tg`);
+  const svId0   = getSetIdFromSlug(`${slug}-sv`);
 
-  // fallbacks si la map ne renvoie rien pour -gg / -tg / -sv
   const mainId = mainId0 || null;
   const ggId   = ggId0 || (mainId ? `${mainId}gg` : null);
   const tgId   = tgId0 || (mainId ? `${mainId}tg` : null);
   const svId   = svId0 || (mainId ? `${mainId}sv` : null);
 
   const [dMain, dGG, dTG, dSV] = await Promise.all([
-    safeGet(mainId),
-    safeGet(ggId),
-    safeGet(tgId),
-    safeGet(svId),
+    safeGet(mainId), safeGet(ggId), safeGet(tgId), safeGet(svId),
   ]);
 
   const itemsMain = unwrap(dMain) || null;
@@ -235,14 +231,15 @@ async function annotateRowsWithPrices(slug, arr){
 
   const isGG = s => /^GG\d+/i.test(String(s||'').trim());
   const isTG = s => /^TG\d+/i.test(String(s||'').trim());
-  const isSV = s => /^SV\d+/i.test(String(s||'').trim());
+  const isSV = s => /^SV\d+/i.test(String(s||'').trim()) || /^SV\d+\/\d+/i.test(String(s||'').trim());
 
-  // "14/198" -> 14, "GG05"/"TG01"/"SV22" -> 5/1/22, sinon la clé brute
   const normIndex = raw => {
-    const s = String(raw ?? '').trim();
-    const m1 = s.match(/^(\d+)\/\d+$/);              if (m1) return parseInt(m1[1],10);
-    const m2 = s.match(/^(?:GG|TG|SV)?0*(\d+)$/i);   if (m2) return parseInt(m2[1],10);
-    const n  = parseInt(s,10);                       return Number.isFinite(n) ? n : s.toUpperCase();
+    const s = String(raw ?? '').trim().toUpperCase();
+    // ex: "14/198", "SV37/SV122"
+    const mDen = s.match(/^(?:SV)?0*(\d+)\/\d+$/i); if (mDen) return parseInt(mDen[1],10);
+    // ex: "GG05", "TG01", "SV37", "014"
+    const mPre = s.match(/^(?:GG|TG|SV)?0*(\d+)$/i); if (mPre) return parseInt(mPre[1],10);
+    const n = parseInt(s,10); return Number.isFinite(n) ? n : s;
   };
 
   const lookup = num => {
@@ -254,22 +251,20 @@ async function annotateRowsWithPrices(slug, arr){
   };
 
   let changed = false;
-  arr.forEach(r=>{
-    const raw   = String(r['Numéro']||'').toUpperCase();
+  for (const r of arr){
+    const raw = String(r['Numéro']||'').toUpperCase();
     const entry = lookup(raw);
-    if (!entry) return;
+    if (!entry) continue;
 
-    // GG/TG/SV = toujours prix "normal"
     const price = (/^(GG|TG|SV)/i.test(raw))
-      ? priceFromEntry(entry, 'normal')
+      ? priceFromEntry(entry, 'normal') // sous-sets = prix "normal"
       : choosePrice(entry, r);
 
     if (price != null) {
       const euro = eur(Number(price));
       if (r['Prix'] !== euro) { r['Prix'] = euro; changed = true; }
     }
-  });
-
+  }
   if (changed) scheduleRender(30);
 }
 
@@ -373,14 +368,13 @@ async function annotateRowsWithPrices(slug, arr){
   }
 
   // ===== Valeur / Top 10 par série (gère GG/TG) =====
- // ===== Valeur / Top 10 par série (gère GG/TG/SV) =====
 async function computePriceStatsForSeries(slug){
   await loadFrMap();
 
   const mainId0 = getSetIdFromSlug(slug);
-  let ggId0 = getSetIdFromSlug(`${slug}-gg`);
-  let tgId0 = getSetIdFromSlug(`${slug}-tg`);
-  let svId0 = getSetIdFromSlug(`${slug}-sv`);
+  const ggId0   = getSetIdFromSlug(`${slug}-gg`);
+  const tgId0   = getSetIdFromSlug(`${slug}-tg`);
+  const svId0   = getSetIdFromSlug(`${slug}-sv`);
 
   const mainId = mainId0 || null;
   const ggId   = ggId0 || (mainId ? `${mainId}gg` : null);
@@ -390,10 +384,7 @@ async function computePriceStatsForSeries(slug){
   if (!mainId && !ggId && !tgId && !svId) return { available:false };
 
   const [dMain, dGG, dTG, dSV] = await Promise.all([
-    safeGet(mainId),
-    safeGet(ggId),
-    safeGet(tgId),
-    safeGet(svId),
+    safeGet(mainId), safeGet(ggId), safeGet(tgId), safeGet(svId),
   ]);
 
   const itemsMain = unwrap(dMain) || null;
@@ -403,18 +394,18 @@ async function computePriceStatsForSeries(slug){
 
   const rows = CARDS.filter(r => slugify(r['Série']) === slug);
 
-  const isGG = (s)=> /^GG\d+/i.test(String(s||'').trim());
-  const isTG = (s)=> /^TG\d+/i.test(String(s||'').trim());
-  const isSV = (s)=> /^SV\d+/i.test(String(s||'').trim());
+  const isGG = s => /^GG\d+/i.test(String(s||'').trim());
+  const isTG = s => /^TG\d+/i.test(String(s||'').trim());
+  const isSV = s => /^SV\d+/i.test(String(s||'').trim()) || /^SV\d+\/\d+/i.test(String(s||'').trim());
 
-  const normIndex = (num)=>{
-    const raw = String(num ?? '').trim();
-    const den = raw.match(/^(\d+)\/\d+$/);            if (den) return parseInt(den[1],10);
-    const gg  = raw.match(/^(?:GG|TG|SV)?0*(\d+)$/i); if (gg)  return parseInt(gg[1],10);
-    const n   = parseInt(raw,10);                     return Number.isFinite(n) ? n : raw;
+  const normIndex = num=>{
+    const s = String(num ?? '').trim().toUpperCase();
+    const mDen = s.match(/^(?:SV)?0*(\d+)\/\d+$/i); if (mDen) return parseInt(mDen[1],10);
+    const mPre = s.match(/^(?:GG|TG|SV)?0*(\d+)$/i); if (mPre) return parseInt(mPre[1],10);
+    const n = parseInt(s,10); return Number.isFinite(n) ? n : s;
   };
 
-  const lookup = (num)=>{
+  const lookup = num=>{
     const raw = String(num||'').trim().toUpperCase();
     const pool = isGG(raw) ? itemsGG : isTG(raw) ? itemsTG : isSV(raw) ? itemsSV : itemsMain;
     if (!pool) return null;
@@ -422,8 +413,8 @@ async function computePriceStatsForSeries(slug){
     return pool[idx] ?? pool[raw] ?? pool[String(idx)] ?? null;
   };
 
-  const pNorm = (e)=> Number(e?.trend ?? e?.avg30 ?? e?.avg7 ?? e?.low ?? 0) || 0;
-  const pRev  = (e)=> Number(e?.reverseTrend ?? 0) || pNorm(e);
+  const pNorm = e => Number(e?.trend ?? e?.avg30 ?? e?.avg7 ?? e?.low ?? 0) || 0;
+  const pRev  = e => Number(e?.reverseTrend ?? 0) || pNorm(e);
 
   const sum = {
     setU : { normal:0, reverse:0, alt:0 },
@@ -433,39 +424,44 @@ async function computePriceStatsForSeries(slug){
   const topAll = [];
 
   for (const r of rows){
-    const entry = lookup(r['Numéro']);
+    const numRaw = String(r['Numéro']||'');
+    const entry  = lookup(numRaw);
     if (!entry) continue;
 
-    // présence des variantes
-    const hasN   = Number(r['Nb Normal']) !== -1 || isGG(r['Numéro']) || isTG(r['Numéro']) || isSV(r['Numéro']);
+    const prefixed = isGG(numRaw) || isTG(numRaw) || isSV(numRaw);
+
+    // variantes existantes dans le set
+    const hasN   = Number(r['Nb Normal'])  !== -1 || prefixed;
     const hasR   = Number(r['Nb Reverse']) !== -1;
     const hasAlt = Number(r['Alternative']) === 1;
 
-    // GG/TG/SV -> comptés dans "normal"
-    const priceN = pNorm(entry);
+    const priceN = pNorm(entry);  // GG/TG/SV => "normal"
     const priceR = pRev(entry);
-    const priceA = pRev(entry) || pNorm(entry); // Alt fallback
+    const priceA = pRev(entry) || pNorm(entry); // fallback
 
     if (hasN)   sum.setU.normal  += priceN;
     if (hasR)   sum.setU.reverse += priceR;
     if (hasAlt) sum.setU.alt     += priceA;
 
-    const qN = posInt(r['Nb Normal']) + (isGG(r['Numéro']) || isTG(r['Numéro']) || isSV(r['Numéro']) ? 1 : 0);
-    const qR = hasR   ? posInt(r['Nb Reverse']) : 0;
-    const qA = hasAlt ? posInt(r['Nb Spéciale'] ?? r['Nb Speciale']) : 0;
+    // quantités réelles dans le CSV
+    const qNraw = posInt(r['Nb Normal']);
+    const qRraw = posInt(r['Nb Reverse']);
+    const qAraw = posInt(r['Nb Spéciale'] ?? r['Nb Speciale']);
 
-    if (qN > 0) sum.ownU.normal  += priceN;
-    if (qR > 0) sum.ownU.reverse += priceR;
-    if (qA > 0) sum.ownU.alt     += priceA;
+    // Possédé (unique) :
+    if (qNraw > 0 || prefixed) sum.ownU.normal  += priceN;  // SV/GG/TG comptés “1” si 0 déclaré
+    if (qRraw > 0)            sum.ownU.reverse += priceR;
+    if (hasAlt && qAraw > 0)  sum.ownU.alt     += priceA;
 
-    sum.ownD.normal  += Math.max(0, qN - 1) * priceN;
-    sum.ownD.reverse += Math.max(0, qR - 1) * priceR;
-    sum.ownD.alt     += Math.max(0, qA - 1) * priceA;
+    // Possédé (doublons) — uniquement l’excès réel au-delà de 1
+    if (qNraw > 1) sum.ownD.normal  += (qNraw - 1) * priceN;
+    if (qRraw > 1) sum.ownD.reverse += (qRraw - 1) * priceR;
+    if (qAraw > 1) sum.ownD.alt     += (qAraw - 1) * priceA;
 
-    topAll.push({ numero:String(r['Numéro']||'—'), nom:String(r['Nom']||''), price:priceN });
+    topAll.push({ numero:String(numRaw||'—'), nom:String(r['Nom']||''), price:priceN });
   }
 
-  const withTotal = (o)=> ({ ...o, total:o.normal + o.reverse + o.alt });
+  const withTotal = o => ({ ...o, total:o.normal + o.reverse + o.alt });
   topAll.sort((a,b)=> b.price - a.price);
 
   const anyAvailable = !!(itemsMain || itemsGG || itemsTG || itemsSV);
