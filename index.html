@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Ma collection Pokémon — Showcase</title>
+ <link rel="stylesheet" href="./styles/app.css?v=2">
+  <link rel="stylesheet" href="src/styles/stats.css"><!-- garde ta feuille de stats -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script type="module" src="./src/main.js"></script>
+  <script type="module">
+    import { boot } from "./src/app.js";
+    boot();
+  </script>
+</head>
+<body class="theme-dark">
+
+  <!-- Background FX -->
+  <div class="bgfx" aria-hidden="true"></div>
+
+  <!-- Header -->
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <i class="logo" aria-hidden="true"></i>
+        <h1>Poké Collection — Vitrine</h1>
+      </div>
+      <div class="bar">
+        <button class="btn ghost" onclick="document.getElementById('panel-cards').scrollIntoView({behavior:'smooth'})">Catalogue</button>
+        <button class="btn primary" onclick="alert('Contact / Faire une offre — à brancher')">Acheter l’intégralité</button>
+      </div>
+    </div>
+  </header>
+
+<section class="hero-2025">
+  <div class="hero-inner">
+    <div class="hero-col">
+      <h2>Collection Pokémon complète — <span class="txt-gradient">showcase 2025</span></h2>
+      <p class="lede">Vente en un seul lot : cartes, items scellés et cartes gradées. Données de prix (avg7/avg30) + stats de complétion par série.</p>
+      <div class="hero-ctas">
+        <button class="btn primary" onclick="alert('Contact / Faire une offre — à brancher')">Me contacter</button>
+        <button class="btn" onclick="alert('Export inventaire — à brancher')">Télécharger l’inventaire (CSV)</button>
+      </div>
+      <div class="trust">
+        <span class="pill">✔️ Authenticité vérifiée</span>
+        <span class="pill">🔒 Livraison sécurisée / remise</span>
+        <span class="pill">💬 Réponse rapide</span>
+      </div>
+    </div>
+    <div class="hero-col">
+<div class="kpis" id="kpis">
+  <!-- Valeur totale (cartes + gradées + scellés si prix dispo) -->
+  <div class="kpi">
+    <div class="lbl">Valeur estimée</div>
+    <div class="val" id="kpi-total-value">—</div>
+    <div class="sub" id="kpi-total-note">Basée sur avg30 (si dispo)</div>
+  </div>
+
+  <!-- Cartes -->
+<div class="kpi">
+  <div class="lbl">Cartes</div>
+  <div class="val" id="kpi-cards-count">—</div>
+  <div class="sub">
+    Prix dispo : <span id="kpi-cards-priced">—</span>
+    / <span id="kpi-cards-total">—</span>
+  </div>
+</div>
+
+
+  <!-- Scellés -->
+  <div class="kpi">
+    <div class="lbl">Items scellés</div>
+    <div class="val" id="kpi-sealed-count">—</div>
+    <div class="sub">Est. <span id="kpi-sealed-value">—</span></div>
+  </div>
+
+  <!-- Gradées -->
+  <div class="kpi">
+    <div class="lbl">Cartes gradées</div>
+    <div class="val" id="kpi-graded-count">—</div>
+    <div class="sub">Est. <span id="kpi-graded-value">—</span></div>
+  </div>
+</div>
+
+    </div>
+  </div>
+</section>
+
+
+  <!-- Tabs -->
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <div class="tab active" data-tab="cards" role="tab" tabindex="0" aria-selected="true">Cartes</div>
+    <div class="tab" data-tab="sealed" role="tab" tabindex="0" aria-selected="false">Scellés</div>
+    <div class="tab" data-tab="graded" role="tab" tabindex="0" aria-selected="false">Gradées</div>
+    <div class="tab" data-tab="stats" role="tab" tabindex="0" aria-selected="false">Stats</div>
+  </nav>
+
+  <main>
+
+    <!-- CARTES -->
+    <section class="panel" id="panel-cards">
+      <div class="card">
+        <h3>Filtres</h3>
+        <div class="filters">
+          <div class="col">
+            <label for="q">Recherche</label>
+            <input id="q" placeholder="Nom, numéro…" type="text" />
+          </div>
+          <div class="col">
+            <label for="serie">Série</label>
+            <select id="serie"><option value="all">Toutes</option></select>
+          </div>
+          <div class="col">
+            <label for="view">Vue</label>
+            <select id="view">
+              <option value="owned">Possédées</option>
+              <option value="missing">Manquantes</option>
+              <option value="noprice">Sans prix</option>
+              <option value="all">Toutes</option>
+            </select>
+          </div>
+          <div class="col span-2">
+            <label>Raretés</label>
+            <div class="multi">
+              <button id="rarityBtn" type="button" class="multi-btn">Toutes les raretés</button>
+              <div id="rarityDD" class="multi-panel" hidden>
+                <div id="rarityChips" class="chips"></div>
+                <div class="multi-actions">
+                  <button type="button" id="checkAll" class="link">Tout</button>
+                  <button type="button" id="uncheckAll" class="link">Aucun</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div><!-- /filters -->
+      </div>
+
+      <div id="cards-root" class="section" aria-live="polite"></div>
+    </section>
+
+    <!-- SCELLÉS -->
+    <section class="panel" id="panel-sealed" style="display:none">
+      <div class="card">
+        <h3>Filtres scellés</h3>
+        <div class="filters">
+          <div class="col"><label for="qs">Recherche</label><input id="qs" placeholder="Type, détail, commentaire…" type="text"></div>
+          <div class="col"><label for="serieS">Série</label><select id="serieS"><option value="all">Toutes</option></select></div>
+          <div class="col"><label for="typeS">Type</label><select id="typeS"><option value="all">Tous</option></select></div>
+          <div class="col"></div>
+        </div>
+      </div>
+      <div id="sealed-root" class="section"></div>
+    </section>
+
+    <!-- GRADÉES -->
+    <section class="panel" id="panel-graded" style="display:none">
+      <div class="card">
+        <h3>Filtres gradées</h3>
+        <div class="filters">
+          <div class="col"><label for="qg">Recherche</label><input id="qg" placeholder="Nom, numéro, set…" type="text"></div>
+          <div class="col">
+            <label for="minG">Grade minimum</label>
+            <div class="slider-row">
+              <input id="minG" type="range" min="0" max="10" step="0.5" value="0" />
+              <span class="badge badge-value" id="minG_label">0</span>
+            </div>
+          </div>
+          <div class="col">
+            <label for="company">Compagnie</label>
+            <select id="company"><option value="all">Toutes</option><option>PSA</option><option>BGS</option><option>CGC</option></select>
+          </div>
+          <div class="col"></div>
+        </div>
+      </div>
+      <div id="graded-root" class="section"></div>
+    </section>
+
+    <!-- STATS -->
+    <section class="panel" id="panel-stats" style="display:none">
+      <div id="stats-root" class="section"></div>
+    </section>
+
+    <!-- Uploads (optionnels) -->
+    <section class="uploads">
+      <div class="card">
+        <h3>Importer / mettre à jour</h3>
+        <div class="upload-grid">
+          <label class="uploader">
+            <span>Cartes (.csv)</span>
+            <input id="csv-cards" type="file" accept=".csv" />
+          </label>
+          <label class="uploader">
+            <span>Scellés (.csv)</span>
+            <input id="csv-sealed" type="file" accept=".csv" />
+          </label>
+          <label class="uploader">
+            <span>Gradées (.csv)</span>
+            <input id="csv-graded" type="file" accept=".csv" />
+          </label>
+          <button id="load-demo" class="btn ghost" type="button">Charger démo</button>
+        </div>
+        <p class="hint">Ce site charge automatiquement <code>cartes.csv</code>, <code>scelle.csv</code>, <code>gradees.csv</code> et les prix depuis <code>public/prices/*.json</code>. Les images sont lues par chemin relatif (ex : <code>images/pikachu.jpg</code>).</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal image viewer -->
+  <div id="imgModal" class="modal" aria-hidden="true">
+    <button class="close" id="modalClose">Fermer ✕</button>
+    <img id="modalImg" alt="aperçu" />
+  </div>
+
+</body>
+</html>
+

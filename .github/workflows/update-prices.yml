@@ -1,0 +1,39 @@
+name: Update price cache
+
+on:
+  schedule:
+    - cron: "0 4 * * *"   # 04:00 UTC, tous les jours
+  workflow_dispatch:
+
+# nécessaire pour pouvoir commit les fichiers générés
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    # <-- ICI on passe la clé à ton script via une variable d'environnement
+    env:
+      PTCG_API_KEY: ${{ secrets.PTCG_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # si tu n'as pas de dépendances, on ne fait rien ici
+      #- run: npm ci
+
+      - name: Build price JSON
+        run: node scripts/build-prices.js
+
+      - name: Commit updated files
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update price cache"
+          file_pattern: |
+            public/prices/*.json
+            public/sets.json

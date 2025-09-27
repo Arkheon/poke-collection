@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Logs and diagnostics
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build outputs
+build/
+dist/
+.tmp/
+.temp/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE and editor folders
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Coverage and reports
+coverage/
+*.lcov
+
+# Local data extracts
+/data/prices/
+
