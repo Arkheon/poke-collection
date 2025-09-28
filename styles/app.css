@@ -211,16 +211,21 @@ input:focus,select:focus{box-shadow:0 0 0 3px #7c3aed35;border-color:var(--prima
 .si-button .set-icon{width:16px;height:16px;object-fit:contain}
 .si-panel{
   position:absolute;left:0;right:0;top:calc(100% + 6px);
-  border:1px solid var(--ring);border-radius:12px;background:var(--panel);
-  box-shadow:0 20px 60px rgba(0,0,0,.35);z-index:6;max-height:280px;overflow:auto;
+  border:1px solid var(--ring);border-radius:12px;
+  background:rgba(15,23,42,.96); color:#e6eaf2;
+  box-shadow:0 20px 60px rgba(0,0,0,.45);z-index:8;max-height:280px;overflow:auto;
+  backdrop-filter: blur(8px);
 }
-.si-option{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border:0;background:transparent;cursor:pointer;text-align:left}
+.si-option{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border:0;background:transparent;cursor:pointer;text-align:left;color:#e6eaf2}
 .si-option:hover{background:rgba(255,255,255,.08)}
 .si-option .set-icon{width:16px;height:16px;object-fit:contain}
 
 /* ===================== Stats: icône de set dans le titre ===================== */
 #stats-root .s-head .s-title{display:inline-flex;align-items:center;gap:8px}
 #stats-root .s-head .s-title .set-icon{width:20px;height:20px;object-fit:contain}
+
+/* Titre de section (évite que le hint parte à droite) */
+.section h3 .s-title-text{ display:inline-flex; align-items:baseline; gap:6px }
 .ball.red{background:#ef4444}.ball.yellow{background:#f59e0b}.ball.blue{background:#3b82f6}
 
 /* Icônes de rareté */

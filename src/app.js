@@ -985,7 +985,7 @@ if (mode === 'noprice') {
           annotateRowsWithPrices(slug, arr);
         }
 
-        html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${ico}${escapeHtml(title)} <span class='hint'>(${arr.length} cartes)</span></h3><div class='grid'>`;
+        html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${ico}<span class='s-title-text'>${escapeHtml(title)} <span class='hint'>(${arr.length} cartes)</span></span></h3><div class='grid'>`;
 arr.forEach(r=>{
   const url = r['Image URL'] || r['Image'] || '';
   const img = url ? `<img loading='lazy' decoding='async' src='${url}' alt='${escapeHtml(r['Nom']||'')}'/>` : '';
@@ -1074,7 +1074,7 @@ const gradedBadge = (gradedVal !== 0)
         html += `
           <div class="section">
             <h3 style="margin:0 4px 12px 4px;font-size:16px;">
-              ${ico}${escapeHtml(title)} <span class="hint">(${arr.length})</span>
+              ${ico}<span class="s-title-text">${escapeHtml(title)} <span class="hint">(${arr.length})</span></span>
             </h3>
             <div class="grid sealed-grid">`;
 arr.forEach(r => {
