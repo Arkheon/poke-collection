@@ -6,6 +6,7 @@ import { loadFrMap, getSetIdFromSlug } from './services/frMap.js';
 import { loadSetsMeta, eraFromSlug, setSymbolFromSlug } from './services/setsMeta.js';
 import { getSetPrices } from './services/priceService.js';
 import { mountStatsView } from './ui/statsView.js';
+import { enhanceSeriesSelect } from './ui/iconSelect.js';
 
 /* ====================== RENDER SCHEDULER ====================== */
 let _rerenderTimer = null;
@@ -600,6 +601,8 @@ const pRev  = e => Number(e?.reverseTrend ?? 0) || pNorm(e);
         const e = eraFromSlug(serieEl.value);
         if (e && e.key && eraEl && eraEl.value !== e.key) eraEl.value = e.key;
       }
+      // Enhance with icon dropdown UI
+      enhanceSeriesSelect('serie');
     }
 
     // Sealed selectors
@@ -632,6 +635,7 @@ const pRev  = e => Number(e?.reverseTrend ?? 0) || pNorm(e);
         const e = eraFromSlug(serieElS.value);
         if (e && e.key && eraElS && eraElS.value !== e.key) eraElS.value = e.key;
       }
+      enhanceSeriesSelect('serieS');
     }
   }
   function refreshSealedFilters(){

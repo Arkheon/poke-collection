@@ -1,5 +1,6 @@
 // src/ui/statsView.js
 import { eur } from '../domain/pricing.js';
+import { setSymbolFromSlug } from '../services/setsMeta.js';
 
 /**
  * Monte la vue Stats dans #stats-root
@@ -25,10 +26,12 @@ export function mountStatsView({ root, series, loadPrices }) {
 /* =============== RENDER =============== */
 
 function renderSeriesBlock(s) {
+  const sym = setSymbolFromSlug(s.slug);
+  const ico = sym ? `<img class="set-icon" src="${sym}" alt="" aria-hidden="true"/>` : '';
   return `
     <div class="series" data-slug="${s.slug}" data-miss-scope="a">
       <div class="s-head" role="button" aria-expanded="false">
-        <div class="s-title">${s.label}</div>
+        <div class="s-title">${ico}${s.label}</div>
         <div class="progress" aria-hidden="true">
           <span style="width:${Math.max(0, Math.min(100, s.completion)).toFixed(2)}%"></span>
         </div>
