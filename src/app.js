@@ -1,5 +1,5 @@
 // src/app.js
-import { normalize, slugify } from './domain/strings.js';
+import { normalize, slugify, escapeHtml } from './domain/strings.js';
 import { parseNumDen, parseSubset } from './domain/numbers.js';
 import { eur, choosePrice } from './domain/pricing.js';
 import { loadFrMap, getSetIdFromSlug } from './services/frMap.js';
@@ -124,7 +124,22 @@ function initApp(){
   function loadCsvFromUrl(url, cb, onError){
     fetch(url,{cache:'no-store'})
       .then(r=>{ if(!r.ok) throw new Error(r.status+" "+r.statusText); return r.text(); })
-      .then(text=> Papa.parse(text,{header:true,skipEmptyLines:true,complete:res=>cb(res.data)}))
+      .then(text=>{
+        // Détection simple de faux CSV (ex: Gnumeric/XML ou binaire compressé)
+        const looksGnumeric = text.startsWith('<?xml') || text.includes('<gnm:Workbook');
+        const looksBinary = /\x00/.test(text);
+        if(looksGnumeric || looksBinary){
+          const msg = 'Fichier non-CSV détecté (probablement Gnumeric/ZIP). Exportez en CSV texte non compressé.';
+          console.warn(msg, url);
+          // Message utilisateur si scellés (les autres panels restent silencieux)
+          if(/scell/i.test(url)){
+            const rootS = document.getElementById('sealed-root');
+            if(rootS) rootS.innerHTML = `<div class='empty'>${escapeHtml(msg)}<br><small>Chemin: ${escapeHtml(url)}</small></div>`;
+          }
+          throw new Error(msg);
+        }
+        Papa.parse(text,{header:true,skipEmptyLines:true,complete:res=>cb(res.data)});
+      })
       .catch(err=>{ console.warn('CSV auto-load failed for', url, err); onError && onError(err); });
   }
   const normalizeRows = rows =>
@@ -171,24 +186,24 @@ function initApp(){
   const q=document.getElementById('q');
   const serie=document.getElementById('serie');
   const view=document.getElementById('view');
-  q && (q.oninput=()=>render());
-  serie && (serie.onchange=()=>render());
-  view && (view.onchange=()=>render());
+  q && (q.oninput=()=>scheduleRender(80));
+  serie && (serie.onchange=()=>scheduleRender(0));
+  view && (view.onchange=()=>scheduleRender(0));
 
   const qs=document.getElementById('qs');
   const serieS=document.getElementById('serieS');
   const typeS=document.getElementById('typeS');
-  qs && (qs.oninput=()=>render());
-  serieS && (serieS.onchange=()=>render());
-  typeS && (typeS.onchange=()=>render());
+  qs && (qs.oninput=()=>scheduleRender(80));
+  serieS && (serieS.onchange=()=>scheduleRender(0));
+  typeS && (typeS.onchange=()=>scheduleRender(0));
 
   const qg=document.getElementById('qg');
   const company=document.getElementById('company');
   const minG=document.getElementById('minG');
   const minG_label=document.getElementById('minG_label');
-  qg && (qg.oninput=()=>render());
-  company && (company.onchange=()=>render());
-  minG && (minG.oninput=()=>{ if(minG_label) minG_label.textContent=minG.value; render(); });
+  qg && (qg.oninput=()=>scheduleRender(80));
+  company && (company.onchange=()=>scheduleRender(0));
+  minG && (minG.oninput=()=>{ if(minG_label) minG_label.textContent=minG.value; scheduleRender(80); });
 
   buildRarityDropdown();
 
@@ -880,10 +895,10 @@ if (mode === 'noprice') {
           annotateRowsWithPrices(slug, arr);
         }
 
-        html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${title} <span class='hint'>(${arr.length} cartes)</span></h3><div class='grid'>`;
+        html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${escapeHtml(title)} <span class='hint'>(${arr.length} cartes)</span></h3><div class='grid'>`;
 arr.forEach(r=>{
   const url = r['Image URL'] || r['Image'] || '';
-  const img = url ? `<img loading='lazy' src='${url}' alt='${(r['Nom']||'')}'/>` : '';
+  const img = url ? `<img loading='lazy' decoding='async' src='${url}' alt='${escapeHtml(r['Nom']||'')}'/>` : '';
   const qte = ownedQty(r);
   const prix = r['Prix'] ? String(r['Prix']) : null;
 
@@ -898,8 +913,8 @@ const gradedBadge = (gradedVal !== 0)
   <div class='item'>
     <div class='thumb'>${gradedBadge}${img || '<span class="hint">(pas d\'image)</span>'}</div>
     <div class='meta compact'>
-      <div class='title'>${(r['Nom']||'Sans nom')}</div>
-      <div class='subline'>${(r['Numéro']||'—')}</div>
+      <div class='title'>${escapeHtml(r['Nom']||'Sans nom')}</div>
+      <div class='subline'>${escapeHtml(r['Numéro']||'—')}</div>
       <div class='foot'>
         <span class='left'>
           ${rarityIconOnly(r)}
@@ -964,7 +979,7 @@ const gradedBadge = (gradedVal !== 0)
         html += `
           <div class="section">
             <h3 style="margin:0 4px 12px 4px;font-size:16px;">
-              ${title} <span class="hint">(${arr.length})</span>
+              ${escapeHtml(title)} <span class="hint">(${arr.length})</span>
             </h3>
             <div class="grid sealed-grid">`;
 arr.forEach(r => {
@@ -980,15 +995,15 @@ arr.forEach(r => {
   html += `
     <div class="sealed-card">
       <div class="sealed-thumb">
-        ${url ? `<img loading="lazy" src="${url}" alt="${type}"/>`
+        ${url ? `<img loading="lazy" decoding="async" src="${url}" alt="${escapeHtml(type)}"/>`
               : `<span class="noimg hint">(pas d'image)</span>`}
       </div>
       <div class="sealed-meta">
-        ${detail ? `<div class="sealed-sub top">${detail}</div>` : ''}
+        ${detail ? `<div class="sealed-sub top">${escapeHtml(detail)}</div>` : ''}
         <div class="sealed-chips single">
-          <span class="chip"><span class="chip-ico">${sealedIcon(type)}</span>${type}</span>
+          <span class="chip"><span class="chip-ico">${sealedIcon(type)}</span>${escapeHtml(type)}</span>
           ${priceChip}                             <!-- ➕ NEW: chip prix -->
-          ${com ? `<span class="chip muted">${com}</span>` : ''}
+          ${com ? `<span class="chip muted">${escapeHtml(com)}</span>` : ''}
         </div>
       </div>
     </div>`;
@@ -1051,7 +1066,7 @@ arr.forEach(r => {
 
       let html = `<div class="grid">`;
       rows.forEach(r=>{
-        const img = r['Image'] ? `<img loading="lazy" src="${r['Image']}" alt="${r['Nom']||'Carte gradée'}">` : '';
+        const img = r['Image'] ? `<img loading="lazy" decoding="async" src="${r['Image']}" alt="${escapeHtml(r['Nom']||'Carte gradée')}">` : '';
         const nom = r['Nom'] || 'Carte gradée';
         const comp = r['Société'] || '?';
         const note = r['Note'] ? String(r['Note']) : null;
@@ -1068,8 +1083,8 @@ arr.forEach(r => {
           <div class="g-item">
             <div class="g-thumb">${img || '<span class="hint">(pas d\'image)</span>'}</div>
             <div class="g-meta">
-              <div class="g-title">${nom}</div>
-              ${sub ? `<div class="g-sub">${sub}</div>` : ''}
+              <div class="g-title">${escapeHtml(nom)}</div>
+              ${sub ? `<div class="g-sub">${escapeHtml(sub)}</div>` : ''}
               <div class="g-foot">
                 <span class="chip">${companyIcon(comp)} <b>${comp}</b>${note ? ` • <em>${note}</em>`:''}</span>
                 ${priceChip}
