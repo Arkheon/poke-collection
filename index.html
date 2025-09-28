@@ -105,6 +105,10 @@
             <input id="q" placeholder="Nom, numéro…" type="text" />
           </div>
           <div class="col">
+            <label for="era">Set / Ère</label>
+            <select id="era"><option value="all">Toutes</option></select>
+          </div>
+          <div class="col">
             <label for="serie">Série</label>
             <select id="serie"><option value="all">Toutes</option></select>
           </div>
@@ -142,9 +146,9 @@
         <h3>Filtres scellés</h3>
         <div class="filters">
           <div class="col"><label for="qs">Recherche</label><input id="qs" placeholder="Type, détail, commentaire…" type="text"></div>
+          <div class="col"><label for="eraS">Set / Ère</label><select id="eraS"><option value="all">Toutes</option></select></div>
           <div class="col"><label for="serieS">Série</label><select id="serieS"><option value="all">Toutes</option></select></div>
           <div class="col"><label for="typeS">Type</label><select id="typeS"><option value="all">Tous</option></select></div>
-          <div class="col"></div>
         </div>
       </div>
       <div id="sealed-root" class="section"></div>

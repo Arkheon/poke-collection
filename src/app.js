@@ -3,6 +3,7 @@ import { normalize, slugify, escapeHtml } from './domain/strings.js';
 import { parseNumDen, parseSubset } from './domain/numbers.js';
 import { eur, choosePrice } from './domain/pricing.js';
 import { loadFrMap, getSetIdFromSlug } from './services/frMap.js';
+import { loadSetsMeta, eraFromSlug } from './services/setsMeta.js';
 import { getSetPrices } from './services/priceService.js';
 import { mountStatsView } from './ui/statsView.js';
 
@@ -24,6 +25,7 @@ export function boot() {
 
 function initApp(){
   loadFrMap(); // map FR -> setId
+  loadSetsMeta(); // sets meta (series/era + icons), no-op if missing
 
   // Une seule et unique définition : pas de redéclaration possible.
   const params = new URLSearchParams(location.search);
@@ -35,6 +37,7 @@ function initApp(){
   }
 
   let SERIE_CANON = new Map();
+  let ERA_CANON = new Map(); // key -> label
 
   /* ====================== ONGLET NAV ====================== */
   const tabs = document.querySelectorAll('.tab');
@@ -184,16 +187,20 @@ function initApp(){
 
   /* ====================== SÉLECTEURS ====================== */
   const q=document.getElementById('q');
+  const era=document.getElementById('era');
   const serie=document.getElementById('serie');
   const view=document.getElementById('view');
   q && (q.oninput=()=>scheduleRender(80));
+  era && (era.onchange=()=>{ refreshSeries(); scheduleRender(0); });
   serie && (serie.onchange=()=>scheduleRender(0));
   view && (view.onchange=()=>scheduleRender(0));
 
   const qs=document.getElementById('qs');
+  const eraS=document.getElementById('eraS');
   const serieS=document.getElementById('serieS');
   const typeS=document.getElementById('typeS');
   qs && (qs.oninput=()=>scheduleRender(80));
+  eraS && (eraS.onchange=()=>{ refreshSeries(); scheduleRender(0); });
   serieS && (serieS.onchange=()=>scheduleRender(0));
   typeS && (typeS.onchange=()=>scheduleRender(0));
 
@@ -550,20 +557,54 @@ const pRev  = e => Number(e?.reverseTrend ?? 0) || pNorm(e);
     });
     SERIE_CANON = map;
   }
+
+  function rebuildEraCanon(){
+    const m = new Map();
+    for (const sl of SERIE_CANON.keys()){
+      const era = eraFromSlug(sl);
+      if (era && era.key) m.set(era.key, era.label || era.key);
+    }
+    ERA_CANON = m;
+  }
   function refreshSeries(){
     rebuildSerieCanon();
-    const options = ['all', ...Array.from(SERIE_CANON.keys()).sort((a,b)=>
-      SERIE_CANON.get(a).localeCompare(SERIE_CANON.get(b),'fr')
-    )];
+    rebuildEraCanon();
+
+    // Era selector (cards)
+    const eraSel = document.getElementById('era');
+    if (eraSel){
+      const eras = Array.from(ERA_CANON.entries()).sort((a,b)=> a[1].localeCompare(b[1],'fr'));
+      eraSel.innerHTML = ['all', ...eras]
+        .map(e => e==='all' ? `<option value="all">Toutes</option>` : `<option value="${e[0]}">${e[1]}</option>`)
+        .join('');
+    }
+    const selectedEra = document.getElementById('era') ? document.getElementById('era').value : 'all';
+
+    // Series selector (cards), filtered by era
+    let series = Array.from(SERIE_CANON.keys());
+    if (selectedEra !== 'all') series = series.filter(sl => (eraFromSlug(sl)?.key || '') === selectedEra);
     const serie = document.getElementById('serie');
     if(serie){
-      serie.innerHTML = options.map(sl=>`<option value="${sl}">${sl==='all' ? 'Toutes' : SERIE_CANON.get(sl)}</option>`).join('');
+      const opts = ['all', ...series.sort((a,b)=> SERIE_CANON.get(a).localeCompare(SERIE_CANON.get(b),'fr'))];
+      serie.innerHTML = opts.map(sl=>`<option value="${sl}">${sl==='all' ? 'Toutes' : SERIE_CANON.get(sl)}</option>`).join('');
     }
+
+    // Era selector (sealed)
+    const eraSelS = document.getElementById('eraS');
+    if (eraSelS){
+      const eras = Array.from(ERA_CANON.entries()).sort((a,b)=> a[1].localeCompare(b[1],'fr'));
+      eraSelS.innerHTML = ['all', ...eras]
+        .map(e => e==='all' ? `<option value="all">Toutes</option>` : `<option value="${e[0]}">${e[1]}</option>`)
+        .join('');
+    }
+    const selectedEraS = eraSelS ? eraSelS.value : 'all';
+
+    // Series selector (sealed), filtered by era
     const serieS = document.getElementById('serieS');
     const sSet = new Set(SEALED.map(r=>slugify(r['Série']||'')));
-    const sList = ['all', ...Array.from(sSet).filter(Boolean).sort((a,b)=>
-      (SERIE_CANON.get(a)||'').localeCompare(SERIE_CANON.get(b)||'','fr')
-    )];
+    let sArr = Array.from(sSet).filter(Boolean);
+    if (selectedEraS !== 'all') sArr = sArr.filter(sl => (eraFromSlug(sl)?.key || '') === selectedEraS);
+    const sList = ['all', ...sArr.sort((a,b)=> (SERIE_CANON.get(a)||'').localeCompare(SERIE_CANON.get(b)||'','fr'))];
     if(serieS){
       serieS.innerHTML = sList.map(sl=>{
         const label = sl==='all' ? 'Toutes' : (SERIE_CANON.get(sl) || '');
@@ -830,6 +871,12 @@ async function computeKPIsAsync(){
       root.innerHTML=`<div class='empty'>Aucun CSV cartes chargé (auto : <code>${AUTO_SOURCES.cards}</code>)</div>`;
     }else{
       let rows=CARDS.slice();
+      // Era filter first (cards)
+      const eraSel=document.getElementById('era');
+      const selectedEraKey = eraSel ? eraSel.value : 'all';
+      if (selectedEraKey !== 'all') {
+        rows = rows.filter(r => (eraFromSlug(slugify(r['Série'])||'')?.key || '') === selectedEraKey);
+      }
       const serieSel=document.getElementById('serie');
       const selectedSlug = serieSel ? serieSel.value : 'all';
       if(selectedSlug !== 'all'){
@@ -954,7 +1001,10 @@ const gradedBadge = (gradedVal !== 0)
     } else {
       let rows = SEALED.slice();
 
+      const eraSelS = document.getElementById('eraS');
+      const selectedEraSKey = eraSelS ? eraSelS.value : 'all';
       const selectedSlugS = document.getElementById('serieS') ? document.getElementById('serieS').value : 'all';
+      if (selectedEraSKey !== 'all') rows = rows.filter(r => (eraFromSlug(slugify(r['Série'])||'')?.key || '') === selectedEraSKey);
       if (selectedSlugS !== 'all') rows = rows.filter(r => slugify(r['Série']) === selectedSlugS);
 
       const typeS = document.getElementById('typeS');
