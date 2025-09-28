@@ -3,10 +3,11 @@ import { normalize, slugify, escapeHtml } from './domain/strings.js';
 import { parseNumDen, parseSubset } from './domain/numbers.js';
 import { eur, choosePrice } from './domain/pricing.js';
 import { loadFrMap, getSetIdFromSlug } from './services/frMap.js';
-import { loadSetsMeta, eraFromSlug, setSymbolFromSlug } from './services/setsMeta.js';
+import { loadSetsMeta, eraFromSlug } from './services/setsMeta.js';
 import { getSetPrices } from './services/priceService.js';
 import { mountStatsView } from './ui/statsView.js';
 import { enhanceSeriesSelect } from './ui/iconSelect.js';
+import { enhanceSimpleSelect } from './ui/simpleSelect.js';
 
 /* ====================== RENDER SCHEDULER ====================== */
 let _rerenderTimer = null;
@@ -195,6 +196,8 @@ function initApp(){
   era && (era.onchange=()=>{ refreshSeries(); scheduleRender(0); });
   serie && (serie.onchange=()=>{ const sl = serie.value; if (sl && sl !== 'all'){ const e = eraFromSlug(sl); const eraEl = document.getElementById('era'); if (e && e.key && eraEl) eraEl.value = e.key; } refreshSeries(); scheduleRender(0); });
   view && (view.onchange=()=>scheduleRender(0));
+  // enhance simple selects that are static
+  enhanceSimpleSelect('view');
 
   const qs=document.getElementById('qs');
   const eraS=document.getElementById('eraS');
@@ -585,6 +588,8 @@ const pRev  = e => Number(e?.reverseTrend ?? 0) || pNorm(e);
         .join('');
       // keep selection if possible
       if (prevEra && (prevEra === 'all' || ERA_CANON.has(prevEra))) eraEl.value = prevEra;
+      // style dropdown
+      enhanceSimpleSelect('era');
     }
     const selectedEra = eraEl ? eraEl.value : 'all';
 
@@ -617,6 +622,7 @@ const pRev  = e => Number(e?.reverseTrend ?? 0) || pNorm(e);
         .map(e => e==='all' ? `<option value="all">Toutes</option>` : `<option value="${e[0]}">${e[1]}</option>`)
         .join('');
       if (prevEraS && (prevEraS === 'all' || ERA_CANON.has(prevEraS))) eraElS.value = prevEraS;
+      enhanceSimpleSelect('eraS');
     }
     const selectedEraS = eraElS ? eraElS.value : 'all';
 
@@ -645,12 +651,14 @@ const pRev  = e => Number(e?.reverseTrend ?? 0) || pNorm(e);
     SEALED.forEach(r=>{ const raw = normalize(r['Type']); if(raw) t.add(raw); });
     const tOpt=['all',...Array.from(t).sort((a,b)=>a.localeCompare(b,'fr'))];
     if(typeS) typeS.innerHTML=tOpt.map(v=>`<option value="${v}">${v==='all'?'Tous':v}</option>`).join('');
+    enhanceSimpleSelect('typeS');
   }
   function refreshCompanies(){
     const company=document.getElementById('company');
     const s=new Set(GRADED.map(r=>String(r['Société']||'')));
     const options=['all',...Array.from(s).filter(Boolean).sort((a,b)=>a.localeCompare(b,'fr'))];
     if(company) company.innerHTML=options.map(v=>`<option value="${v}">${v==='all'?'Toutes':v}</option>`).join('');
+    enhanceSimpleSelect('company');
   }
 
   function ownedQty(r){
@@ -974,8 +982,6 @@ if (mode === 'noprice') {
 
       groups.forEach(([slug,arr])=>{
         const title = SERIE_CANON.get(slug) || 'Sans série';
-        const sym = setSymbolFromSlug(slug);
-        const ico = sym ? `<img class='set-icon' src='${sym}' alt='' aria-hidden='true'/>` : '';
         arr.sort(sortCardNumbers);
 
         // Ajoute le prix seulement quand une série précise est sélectionnée (affichage grille)
@@ -985,7 +991,7 @@ if (mode === 'noprice') {
           annotateRowsWithPrices(slug, arr);
         }
 
-        html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${ico}<span class='s-title-text'>${escapeHtml(title)} <span class='hint'>(${arr.length} cartes)</span></span></h3><div class='grid'>`;
+        html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'><span class='s-title-text'>${escapeHtml(title)} <span class='hint'>(${arr.length} cartes)</span></span></h3><div class='grid'>`;
 arr.forEach(r=>{
   const url = r['Image URL'] || r['Image'] || '';
   const img = url ? `<img loading='lazy' decoding='async' src='${url}' alt='${escapeHtml(r['Nom']||'')}'/>` : '';
@@ -1069,12 +1075,10 @@ const gradedBadge = (gradedVal !== 0)
       let html = '';
       groups.forEach(([slug, arr]) => {
         const title = SERIE_CANON.get(slug) || 'Sans série';
-        const sym = setSymbolFromSlug(slug);
-        const ico = sym ? `<img class="set-icon" src="${sym}" alt="" aria-hidden="true"/>` : '';
         html += `
           <div class="section">
             <h3 style="margin:0 4px 12px 4px;font-size:16px;">
-              ${ico}<span class="s-title-text">${escapeHtml(title)} <span class="hint">(${arr.length})</span></span>
+              <span class="s-title-text">${escapeHtml(title)} <span class="hint">(${arr.length})</span></span>
             </h3>
             <div class="grid sealed-grid">`;
 arr.forEach(r => {
