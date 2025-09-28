@@ -1,0 +1,849 @@
+{
+  "byId": {
+    "base1": {
+      "series": "Base",
+      "seriesKey": "base",
+      "symbol": "set-icons/base1.png"
+    },
+    "base2": {
+      "series": "Base",
+      "seriesKey": "base",
+      "symbol": "set-icons/base2.png"
+    },
+    "basep": {
+      "series": "Base",
+      "seriesKey": "base",
+      "symbol": "set-icons/basep.png"
+    },
+    "base3": {
+      "series": "Base",
+      "seriesKey": "base",
+      "symbol": "set-icons/base3.png"
+    },
+    "base4": {
+      "series": "Base",
+      "seriesKey": "base",
+      "symbol": "set-icons/base4.png"
+    },
+    "base5": {
+      "series": "Base",
+      "seriesKey": "base",
+      "symbol": "set-icons/base5.png"
+    },
+    "gym1": {
+      "series": "Gym",
+      "seriesKey": "gym",
+      "symbol": "set-icons/gym1.png"
+    },
+    "gym2": {
+      "series": "Gym",
+      "seriesKey": "gym",
+      "symbol": "set-icons/gym2.png"
+    },
+    "neo1": {
+      "series": "Neo",
+      "seriesKey": "neo",
+      "symbol": "set-icons/neo1.png"
+    },
+    "neo2": {
+      "series": "Neo",
+      "seriesKey": "neo",
+      "symbol": "set-icons/neo2.png"
+    },
+    "si1": {
+      "series": "Other",
+      "seriesKey": "other",
+      "symbol": "set-icons/si1.png"
+    },
+    "neo3": {
+      "series": "Neo",
+      "seriesKey": "neo",
+      "symbol": "set-icons/neo3.png"
+    },
+    "neo4": {
+      "series": "Neo",
+      "seriesKey": "neo",
+      "symbol": "set-icons/neo4.png"
+    },
+    "base6": {
+      "series": "Other",
+      "seriesKey": "other",
+      "symbol": "set-icons/base6.png"
+    },
+    "ecard1": {
+      "series": "E-Card",
+      "seriesKey": "e-card",
+      "symbol": "set-icons/ecard1.png"
+    },
+    "ecard2": {
+      "series": "E-Card",
+      "seriesKey": "e-card",
+      "symbol": "set-icons/ecard2.png"
+    },
+    "ecard3": {
+      "series": "E-Card",
+      "seriesKey": "e-card",
+      "symbol": "set-icons/ecard3.png"
+    },
+    "ex1": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/ex1.png"
+    },
+    "ex2": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/ex2.png"
+    },
+    "ex3": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/ex3.png"
+    },
+    "np": {
+      "series": "NP",
+      "seriesKey": "np",
+      "symbol": "set-icons/np.png"
+    },
+    "ex4": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/ex4.png"
+    },
+    "ex5": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/ex5.png"
+    },
+    "ex6": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/ex6.png"
+    },
+    "pop1": {
+      "series": "POP",
+      "seriesKey": "pop",
+      "symbol": "set-icons/pop1.png"
+    },
+    "ex7": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/ex7.png"
+    },
+    "ex8": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/ex8.png"
+    },
+    "ex9": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/ex9.png"
+    },
+    "ex10": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/ex10.png"
+    },
+    "pop2": {
+      "series": "POP",
+      "seriesKey": "pop",
+      "symbol": "set-icons/pop2.png"
+    },
+    "ex11": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/ex11.png"
+    },
+    "ex12": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/ex12.png"
+    },
+    "pop3": {
+      "series": "POP",
+      "seriesKey": "pop",
+      "symbol": "set-icons/pop3.png"
+    },
+    "ex13": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/ex13.png"
+    },
+    "ex14": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/ex14.png"
+    },
+    "pop4": {
+      "series": "POP",
+      "seriesKey": "pop",
+      "symbol": "set-icons/pop4.png"
+    },
+    "ex15": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/ex15.png"
+    },
+    "pop5": {
+      "series": "POP",
+      "seriesKey": "pop",
+      "symbol": "set-icons/pop5.png"
+    },
+    "ex16": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/ex16.png"
+    },
+    "dp1": {
+      "series": "Diamond & Pearl",
+      "seriesKey": "diamond-pearl",
+      "symbol": "set-icons/dp1.png"
+    },
+    "dpp": {
+      "series": "Diamond & Pearl",
+      "seriesKey": "diamond-pearl",
+      "symbol": "set-icons/dpp.png"
+    },
+    "dp2": {
+      "series": "Diamond & Pearl",
+      "seriesKey": "diamond-pearl",
+      "symbol": "set-icons/dp2.png"
+    },
+    "pop6": {
+      "series": "POP",
+      "seriesKey": "pop",
+      "symbol": "set-icons/pop6.png"
+    },
+    "dp3": {
+      "series": "Diamond & Pearl",
+      "seriesKey": "diamond-pearl",
+      "symbol": "set-icons/dp3.png"
+    },
+    "dp4": {
+      "series": "Diamond & Pearl",
+      "seriesKey": "diamond-pearl",
+      "symbol": "set-icons/dp4.png"
+    },
+    "pop7": {
+      "series": "POP",
+      "seriesKey": "pop",
+      "symbol": "set-icons/pop7.png"
+    },
+    "dp5": {
+      "series": "Diamond & Pearl",
+      "seriesKey": "diamond-pearl",
+      "symbol": "set-icons/dp5.png"
+    },
+    "dp6": {
+      "series": "Diamond & Pearl",
+      "seriesKey": "diamond-pearl",
+      "symbol": "set-icons/dp6.png"
+    },
+    "pop8": {
+      "series": "POP",
+      "seriesKey": "pop",
+      "symbol": "set-icons/pop8.png"
+    },
+    "dp7": {
+      "series": "Diamond & Pearl",
+      "seriesKey": "diamond-pearl",
+      "symbol": "set-icons/dp7.png"
+    },
+    "pl1": {
+      "series": "Platinum",
+      "seriesKey": "platinum",
+      "symbol": "set-icons/pl1.png"
+    },
+    "pop9": {
+      "series": "POP",
+      "seriesKey": "pop",
+      "symbol": "set-icons/pop9.png"
+    },
+    "pl2": {
+      "series": "Platinum",
+      "seriesKey": "platinum",
+      "symbol": "set-icons/pl2.png"
+    },
+    "pl3": {
+      "series": "Platinum",
+      "seriesKey": "platinum",
+      "symbol": "set-icons/pl3.png"
+    },
+    "pl4": {
+      "series": "Platinum",
+      "seriesKey": "platinum",
+      "symbol": "set-icons/pl4.png"
+    },
+    "ru1": {
+      "series": "Other",
+      "seriesKey": "other",
+      "symbol": "set-icons/ru1.png"
+    },
+    "hgss1": {
+      "series": "HeartGold & SoulSilver",
+      "seriesKey": "heartgold-soulsilver",
+      "symbol": "set-icons/hgss1.png"
+    },
+    "hsp": {
+      "series": "HeartGold & SoulSilver",
+      "seriesKey": "heartgold-soulsilver",
+      "symbol": "set-icons/hsp.png"
+    },
+    "hgss2": {
+      "series": "HeartGold & SoulSilver",
+      "seriesKey": "heartgold-soulsilver",
+      "symbol": "set-icons/hgss2.png"
+    },
+    "hgss3": {
+      "series": "HeartGold & SoulSilver",
+      "seriesKey": "heartgold-soulsilver",
+      "symbol": "set-icons/hgss3.png"
+    },
+    "hgss4": {
+      "series": "HeartGold & SoulSilver",
+      "seriesKey": "heartgold-soulsilver",
+      "symbol": "set-icons/hgss4.png"
+    },
+    "col1": {
+      "series": "HeartGold & SoulSilver",
+      "seriesKey": "heartgold-soulsilver",
+      "symbol": "set-icons/col1.png"
+    },
+    "bwp": {
+      "series": "Black & White",
+      "seriesKey": "black-white",
+      "symbol": "set-icons/bwp.png"
+    },
+    "bw1": {
+      "series": "Black & White",
+      "seriesKey": "black-white",
+      "symbol": "set-icons/bw1.png"
+    },
+    "mcd11": {
+      "series": "Other",
+      "seriesKey": "other",
+      "symbol": "set-icons/mcd11.png"
+    },
+    "bw2": {
+      "series": "Black & White",
+      "seriesKey": "black-white",
+      "symbol": "set-icons/bw2.png"
+    },
+    "bw3": {
+      "series": "Black & White",
+      "seriesKey": "black-white",
+      "symbol": "set-icons/bw3.png"
+    },
+    "bw4": {
+      "series": "Black & White",
+      "seriesKey": "black-white",
+      "symbol": "set-icons/bw4.png"
+    },
+    "bw5": {
+      "series": "Black & White",
+      "seriesKey": "black-white",
+      "symbol": "set-icons/bw5.png"
+    },
+    "mcd12": {
+      "series": "Other",
+      "seriesKey": "other",
+      "symbol": "set-icons/mcd12.png"
+    },
+    "bw6": {
+      "series": "Black & White",
+      "seriesKey": "black-white",
+      "symbol": "set-icons/bw6.png"
+    },
+    "dv1": {
+      "series": "Black & White",
+      "seriesKey": "black-white",
+      "symbol": "set-icons/dv1.png"
+    },
+    "bw7": {
+      "series": "Black & White",
+      "seriesKey": "black-white",
+      "symbol": "set-icons/bw7.png"
+    },
+    "bw8": {
+      "series": "Black & White",
+      "seriesKey": "black-white",
+      "symbol": "set-icons/bw8.png"
+    },
+    "bw9": {
+      "series": "Black & White",
+      "seriesKey": "black-white",
+      "symbol": "set-icons/bw9.png"
+    },
+    "bw10": {
+      "series": "Black & White",
+      "seriesKey": "black-white",
+      "symbol": "set-icons/bw10.png"
+    },
+    "xyp": {
+      "series": "XY",
+      "seriesKey": "xy",
+      "symbol": "set-icons/xyp.png"
+    },
+    "bw11": {
+      "series": "Black & White",
+      "seriesKey": "black-white",
+      "symbol": "set-icons/bw11.png"
+    },
+    "xy0": {
+      "series": "XY",
+      "seriesKey": "xy",
+      "symbol": "set-icons/xy0.png"
+    },
+    "xy1": {
+      "series": "XY",
+      "seriesKey": "xy",
+      "symbol": "set-icons/xy1.png"
+    },
+    "xy2": {
+      "series": "XY",
+      "seriesKey": "xy",
+      "symbol": "set-icons/xy2.png"
+    },
+    "xy3": {
+      "series": "XY",
+      "seriesKey": "xy",
+      "symbol": "set-icons/xy3.png"
+    },
+    "xy4": {
+      "series": "XY",
+      "seriesKey": "xy",
+      "symbol": "set-icons/xy4.png"
+    },
+    "xy5": {
+      "series": "XY",
+      "seriesKey": "xy",
+      "symbol": "set-icons/xy5.png"
+    },
+    "dc1": {
+      "series": "XY",
+      "seriesKey": "xy",
+      "symbol": "set-icons/dc1.png"
+    },
+    "xy6": {
+      "series": "XY",
+      "seriesKey": "xy",
+      "symbol": "set-icons/xy6.png"
+    },
+    "xy7": {
+      "series": "XY",
+      "seriesKey": "xy",
+      "symbol": "set-icons/xy7.png"
+    },
+    "xy8": {
+      "series": "XY",
+      "seriesKey": "xy",
+      "symbol": "set-icons/xy8.png"
+    },
+    "xy9": {
+      "series": "XY",
+      "seriesKey": "xy",
+      "symbol": "set-icons/xy9.png"
+    },
+    "g1": {
+      "series": "XY",
+      "seriesKey": "xy",
+      "symbol": "set-icons/g1.png"
+    },
+    "xy10": {
+      "series": "XY",
+      "seriesKey": "xy",
+      "symbol": "set-icons/xy10.png"
+    },
+    "xy11": {
+      "series": "XY",
+      "seriesKey": "xy",
+      "symbol": "set-icons/xy11.png"
+    },
+    "mcd16": {
+      "series": "Other",
+      "seriesKey": "other",
+      "symbol": "set-icons/mcd16.png"
+    },
+    "xy12": {
+      "series": "XY",
+      "seriesKey": "xy",
+      "symbol": "set-icons/xy12.png"
+    },
+    "sm1": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/sm1.png"
+    },
+    "smp": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/smp.png"
+    },
+    "sm2": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/sm2.png"
+    },
+    "sm3": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/sm3.png"
+    },
+    "sm35": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/sm35.png"
+    },
+    "sm4": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/sm4.png"
+    },
+    "sm5": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/sm5.png"
+    },
+    "sm6": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/sm6.png"
+    },
+    "sm7": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/sm7.png"
+    },
+    "sm75": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/sm75.png"
+    },
+    "sm8": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/sm8.png"
+    },
+    "sm9": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/sm9.png"
+    },
+    "det1": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/det1.png"
+    },
+    "sm10": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/sm10.png"
+    },
+    "sm11": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/sm11.png"
+    },
+    "sm115": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/sm115.png"
+    },
+    "sma": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/sma.png"
+    },
+    "mcd19": {
+      "series": "Other",
+      "seriesKey": "other",
+      "symbol": "set-icons/mcd19.png"
+    },
+    "sm12": {
+      "series": "Sun & Moon",
+      "seriesKey": "sun-moon",
+      "symbol": "set-icons/sm12.png"
+    },
+    "swshp": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swshp.png"
+    },
+    "swsh1": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh1.png"
+    },
+    "swsh2": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh2.png"
+    },
+    "swsh3": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh3.png"
+    },
+    "swsh35": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh35.png"
+    },
+    "swsh4": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh4.png"
+    },
+    "swsh45": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh45.png"
+    },
+    "swsh45sv": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh45sv.png"
+    },
+    "swsh5": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh5.png"
+    },
+    "swsh6": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh6.png"
+    },
+    "swsh7": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh7.png"
+    },
+    "cel25": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/cel25.png"
+    },
+    "cel25c": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/cel25c.png"
+    },
+    "mcd14": {
+      "series": "Other",
+      "seriesKey": "other",
+      "symbol": "set-icons/mcd14.png"
+    },
+    "mcd15": {
+      "series": "Other",
+      "seriesKey": "other",
+      "symbol": "set-icons/mcd15.png"
+    },
+    "mcd18": {
+      "series": "Other",
+      "seriesKey": "other",
+      "symbol": "set-icons/mcd18.png"
+    },
+    "mcd17": {
+      "series": "Other",
+      "seriesKey": "other",
+      "symbol": "set-icons/mcd17.png"
+    },
+    "mcd21": {
+      "series": "Other",
+      "seriesKey": "other",
+      "symbol": "set-icons/mcd21.png"
+    },
+    "bp": {
+      "series": "Other",
+      "seriesKey": "other",
+      "symbol": "set-icons/bp.png"
+    },
+    "swsh8": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh8.png"
+    },
+    "fut20": {
+      "series": "Other",
+      "seriesKey": "other",
+      "symbol": "set-icons/fut20.png"
+    },
+    "tk1a": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/tk1a.png"
+    },
+    "tk1b": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/tk1b.png"
+    },
+    "tk2a": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/tk2a.png"
+    },
+    "tk2b": {
+      "series": "EX",
+      "seriesKey": "ex",
+      "symbol": "set-icons/tk2b.png"
+    },
+    "swsh9": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh9.png"
+    },
+    "swsh9tg": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh9tg.png"
+    },
+    "swsh10": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh10.png"
+    },
+    "swsh10tg": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh10tg.png"
+    },
+    "pgo": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/pgo.png"
+    },
+    "swsh11": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh11.png"
+    },
+    "swsh11tg": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh11tg.png"
+    },
+    "swsh12": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh12.png"
+    },
+    "swsh12tg": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh12tg.png"
+    },
+    "mcd22": {
+      "series": "Other",
+      "seriesKey": "other",
+      "symbol": "set-icons/mcd22.png"
+    },
+    "swsh12pt5": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh12pt5.png"
+    },
+    "swsh12pt5gg": {
+      "series": "Sword & Shield",
+      "seriesKey": "sword-shield",
+      "symbol": "set-icons/swsh12pt5gg.png"
+    },
+    "sv1": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/sv1.png"
+    },
+    "svp": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/svp.png"
+    },
+    "sv2": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/sv2.png"
+    },
+    "sve": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/sve.png"
+    },
+    "sv3": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/sv3.png"
+    },
+    "sv3pt5": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/sv3pt5.png"
+    },
+    "sv4": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/sv4.png"
+    },
+    "sv4pt5": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/sv4pt5.png"
+    },
+    "sv5": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/sv5.png"
+    },
+    "sv6": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/sv6.png"
+    },
+    "sv6pt5": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/sv6pt5.png"
+    },
+    "sv7": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/sv7.png"
+    },
+    "sv8": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/sv8.png"
+    },
+    "sv8pt5": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/sv8pt5.png"
+    },
+    "sv9": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/sv9.png"
+    },
+    "sv10": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/sv10.png"
+    },
+    "zsv10pt5": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/zsv10pt5.png"
+    },
+    "rsv10pt5": {
+      "series": "Scarlet & Violet",
+      "seriesKey": "scarlet-violet",
+      "symbol": "set-icons/rsv10pt5.png"
+    },
+    "me1": {
+      "series": "Mega Evolution",
+      "seriesKey": "mega-evolution",
+      "symbol": "set-icons/me1.png"
+    }
+  }
+}
