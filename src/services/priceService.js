@@ -6,6 +6,7 @@ const BASE_PATH =
 // services/priceService.js
 const PRICE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const PRICE_CACHE = new Map(); // setId -> items | 'loading'
+let KNOWN_SETS = null;         // list<string> from public/sets.json
 
 function readSetCache(setId) {
   try {
@@ -45,10 +46,29 @@ async function fetchFirstOk(setId){
   throw new Error(`prices for ${setId} not found in known paths`);
 }
 
+async function ensureKnownSets(){
+  if (KNOWN_SETS) return KNOWN_SETS;
+  try{
+    const r = await fetch(`${BASE_PATH}public/sets.json`, { cache: 'no-store' });
+    if (r.ok) {
+      KNOWN_SETS = await r.json();
+      if (!Array.isArray(KNOWN_SETS)) KNOWN_SETS = null;
+    }
+  }catch(_){ /* ignore */ }
+  return KNOWN_SETS;
+}
+
 export async function getSetPrices(setId) {
   if (!setId) return {};
   if (PRICE_CACHE.has(setId) && PRICE_CACHE.get(setId) !== 'loading') {
     return PRICE_CACHE.get(setId);
+  }
+
+  // If we know the list of built sets, skip fetch for unknown IDs to avoid 404 noise
+  const known = await ensureKnownSets();
+  if (known && !known.includes(setId)) {
+    PRICE_CACHE.set(setId, {});
+    return {};
   }
 
   const cached = readSetCache(setId);

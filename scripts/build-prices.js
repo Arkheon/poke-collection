@@ -5,6 +5,7 @@ import path from "node:path";
 const API = "https://api.pokemontcg.io/v2";
 const PRICE_DIR = path.join("public", "prices");
 const FR_MAP_FILE = path.join("data", "fr_map.json");
+const CARDS_CSV = path.join("cartes.csv");
 
 // Réglages
 const MAX_CONCURRENCY = 2;     // ↓ charge coté API
@@ -73,12 +74,74 @@ async function buildSetPrices(setId){
   return out;
 }
 
+// ==== Discover only needed sets from cartes.csv + fr_map.json ====
+function normalizeNFC(s){ return (s ?? "").normalize('NFC').trim().replace(/\s+/g,' '); }
+function slugify(s){
+  const nfd = normalizeNFC(s).normalize('NFD');
+  const noAcc = nfd.replace(/[\u0300-\u036f]/g,'');
+  return noAcc.toLowerCase();
+}
+
+function readFRMapBySlug(){
+  const raw = fs.readFileSync(FR_MAP_FILE, 'utf8');
+  const map = JSON.parse(raw);
+  const out = {};
+  for (const [k,v] of Object.entries(map)) out[slugify(k)] = v;
+  return out;
+}
+
+function detectUsedSets({ frBySlug }){
+  let txt;
+  try { txt = fs.readFileSync(CARDS_CSV, 'utf8'); }
+  catch { return []; }
+
+  const lines = txt.split(/\r?\n/);
+  if (!lines.length) return [];
+  const header = lines[0].split('\t');
+  const idxSerie = header.findIndex(h => /s[ée]rie/i.test(h));
+  const idxNum   = header.findIndex(h => /num[ée]ro/i.test(h));
+  if (idxSerie === -1) return [];
+
+  // group by slug, detect subsets present
+  const used = new Map(); // slug -> { mainId, gg:false, tg:false, sv:false }
+  for (let i=1;i<lines.length;i++){
+    const L = lines[i]; if (!L) continue;
+    const cols = L.split('\t'); if (cols.length <= idxSerie) continue;
+    const serieRaw = cols[idxSerie];
+    const numRaw = (idxNum !== -1 ? cols[idxNum] : '') || '';
+    const slug = slugify(serieRaw);
+    const mainId = frBySlug[slug];
+    if (!mainId) continue; // ignore unmapped series
+    const obj = used.get(slug) || { mainId, gg:false, tg:false, sv:false };
+    const num = String(numRaw).trim().toUpperCase();
+    if (/^GG\d+/.test(num)) obj.gg = true;
+    if (/^TG\d+/.test(num)) obj.tg = true;
+    if (/^(SV\d+|SV\d+\/\d+)/.test(num)) obj.sv = true;
+    used.set(slug, obj);
+  }
+
+  // expand to real setIds (only those present in fr_map.json keys)
+  const out = new Set();
+  for (const [slug, info] of used){
+    const mainId = info.mainId;
+    out.add(mainId);
+    const ggId = frBySlug[`${slug}-gg`];
+    const tgId = frBySlug[`${slug}-tg`];
+    const svId = frBySlug[`${slug}-sv`];
+    if (info.gg && ggId) out.add(ggId);
+    if (info.tg && tgId) out.add(tgId);
+    if (info.sv && svId) out.add(svId);
+  }
+  return Array.from(out);
+}
+
 async function main(){
   ensureDir(PRICE_DIR);
 
-  // mapping FR -> setId
-  const frMap = JSON.parse(fs.readFileSync(FR_MAP_FILE, "utf8"));
-  const setIds = Array.from(new Set(Object.values(frMap))).filter(Boolean);
+  // mapping FR -> setId (by slug)
+  const frBySlug = readFRMapBySlug();
+  // Focus only on sets actually used in cartes.csv (+ only subsets that appear)
+  const setIds = detectUsedSets({ frBySlug });
 
   let idx = 0;
   const errors = [];
