@@ -135,6 +135,7 @@ h1{font-size:18px;margin:0;color:#eef2ff}
 .card{border:1px solid var(--ring);border-radius:18px;background:var(--panel);box-shadow:var(--elev2)}
 .card>h3{margin:0;padding:12px 14px;border-bottom:1px solid var(--ring);font-size:14px;background:rgba(255,255,255,.08);border-radius:18px 18px 0 0}
 .section{padding:14px}
+.section h3 img.set-icon{width:18px;height:18px;object-fit:contain;margin-right:6px;vertical-align:middle;filter:drop-shadow(0 0 2px rgba(0,0,0,.25));}
 
 /* Filtres */
 .filters{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:12px}
@@ -671,4 +672,3 @@ input[type="range"]::-moz-range-thumb:hover{ transform:scale(1.15); background:v
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
 }
-

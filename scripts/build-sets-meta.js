@@ -71,7 +71,7 @@ async function main() {
       if (symbolUrl) {
         const out = path.join(ICON_DIR, `${id}.png`);
         const ok = await downloadIcon(symbolUrl, out);
-        if (ok) localSymbol = `set-icons/${id}.png`;
+        if (ok) localSymbol = `public/set-icons/${id}.png`;
       }
       byId[id] = { series, seriesKey: sKey, symbol: localSymbol || symbolUrl || '' };
     }
@@ -85,4 +85,3 @@ async function main() {
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
-

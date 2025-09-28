@@ -3,7 +3,7 @@ import { normalize, slugify, escapeHtml } from './domain/strings.js';
 import { parseNumDen, parseSubset } from './domain/numbers.js';
 import { eur, choosePrice } from './domain/pricing.js';
 import { loadFrMap, getSetIdFromSlug } from './services/frMap.js';
-import { loadSetsMeta, eraFromSlug } from './services/setsMeta.js';
+import { loadSetsMeta, eraFromSlug, setSymbolFromSlug } from './services/setsMeta.js';
 import { getSetPrices } from './services/priceService.js';
 import { mountStatsView } from './ui/statsView.js';
 
@@ -192,7 +192,7 @@ function initApp(){
   const view=document.getElementById('view');
   q && (q.oninput=()=>scheduleRender(80));
   era && (era.onchange=()=>{ refreshSeries(); scheduleRender(0); });
-  serie && (serie.onchange=()=>scheduleRender(0));
+  serie && (serie.onchange=()=>{ const sl = serie.value; if (sl && sl !== 'all'){ const e = eraFromSlug(sl); const eraEl = document.getElementById('era'); if (e && e.key && eraEl) eraEl.value = e.key; } refreshSeries(); scheduleRender(0); });
   view && (view.onchange=()=>scheduleRender(0));
 
   const qs=document.getElementById('qs');
@@ -201,7 +201,7 @@ function initApp(){
   const typeS=document.getElementById('typeS');
   qs && (qs.oninput=()=>scheduleRender(80));
   eraS && (eraS.onchange=()=>{ refreshSeries(); scheduleRender(0); });
-  serieS && (serieS.onchange=()=>scheduleRender(0));
+  serieS && (serieS.onchange=()=>{ const sl = serieS.value; if (sl && sl !== 'all'){ const e = eraFromSlug(sl); const eraElS = document.getElementById('eraS'); if (e && e.key && eraElS) eraElS.value = e.key; } refreshSeries(); scheduleRender(0); });
   typeS && (typeS.onchange=()=>scheduleRender(0));
 
   const qg=document.getElementById('qg');
@@ -570,46 +570,68 @@ const pRev  = e => Number(e?.reverseTrend ?? 0) || pNorm(e);
     rebuildSerieCanon();
     rebuildEraCanon();
 
+    // Remember previous selections
+    const eraEl = document.getElementById('era');
+    const serieEl = document.getElementById('serie');
+    const prevEra = eraEl ? eraEl.value : 'all';
+    const prevSerie = serieEl ? serieEl.value : 'all';
+
     // Era selector (cards)
-    const eraSel = document.getElementById('era');
-    if (eraSel){
+    if (eraEl){
       const eras = Array.from(ERA_CANON.entries()).sort((a,b)=> a[1].localeCompare(b[1],'fr'));
-      eraSel.innerHTML = ['all', ...eras]
+      eraEl.innerHTML = ['all', ...eras]
         .map(e => e==='all' ? `<option value="all">Toutes</option>` : `<option value="${e[0]}">${e[1]}</option>`)
         .join('');
+      // keep selection if possible
+      if (prevEra && (prevEra === 'all' || ERA_CANON.has(prevEra))) eraEl.value = prevEra;
     }
-    const selectedEra = document.getElementById('era') ? document.getElementById('era').value : 'all';
+    const selectedEra = eraEl ? eraEl.value : 'all';
 
     // Series selector (cards), filtered by era
-    let series = Array.from(SERIE_CANON.keys());
-    if (selectedEra !== 'all') series = series.filter(sl => (eraFromSlug(sl)?.key || '') === selectedEra);
-    const serie = document.getElementById('serie');
-    if(serie){
+    if (serieEl){
+      let series = Array.from(SERIE_CANON.keys());
+      if (selectedEra !== 'all') series = series.filter(sl => (eraFromSlug(sl)?.key || '') === selectedEra);
       const opts = ['all', ...series.sort((a,b)=> SERIE_CANON.get(a).localeCompare(SERIE_CANON.get(b),'fr'))];
-      serie.innerHTML = opts.map(sl=>`<option value="${sl}">${sl==='all' ? 'Toutes' : SERIE_CANON.get(sl)}</option>`).join('');
+      serieEl.innerHTML = opts.map(sl=>`<option value="${sl}">${sl==='all' ? 'Toutes' : SERIE_CANON.get(sl)}</option>`).join('');
+      const canKeepPrevSerie = prevSerie && prevSerie !== 'all' && opts.includes(prevSerie);
+      serieEl.value = canKeepPrevSerie ? prevSerie : 'all';
+      // inverse sync: if serie selected, set era accordingly
+      if (serieEl.value !== 'all'){
+        const e = eraFromSlug(serieEl.value);
+        if (e && e.key && eraEl && eraEl.value !== e.key) eraEl.value = e.key;
+      }
     }
 
-    // Era selector (sealed)
-    const eraSelS = document.getElementById('eraS');
-    if (eraSelS){
+    // Sealed selectors
+    const eraElS = document.getElementById('eraS');
+    const serieElS = document.getElementById('serieS');
+    const prevEraS = eraElS ? eraElS.value : 'all';
+    const prevSerieS = serieElS ? serieElS.value : 'all';
+
+    if (eraElS){
       const eras = Array.from(ERA_CANON.entries()).sort((a,b)=> a[1].localeCompare(b[1],'fr'));
-      eraSelS.innerHTML = ['all', ...eras]
+      eraElS.innerHTML = ['all', ...eras]
         .map(e => e==='all' ? `<option value="all">Toutes</option>` : `<option value="${e[0]}">${e[1]}</option>`)
         .join('');
+      if (prevEraS && (prevEraS === 'all' || ERA_CANON.has(prevEraS))) eraElS.value = prevEraS;
     }
-    const selectedEraS = eraSelS ? eraSelS.value : 'all';
+    const selectedEraS = eraElS ? eraElS.value : 'all';
 
-    // Series selector (sealed), filtered by era
-    const serieS = document.getElementById('serieS');
-    const sSet = new Set(SEALED.map(r=>slugify(r['Série']||'')));
-    let sArr = Array.from(sSet).filter(Boolean);
-    if (selectedEraS !== 'all') sArr = sArr.filter(sl => (eraFromSlug(sl)?.key || '') === selectedEraS);
-    const sList = ['all', ...sArr.sort((a,b)=> (SERIE_CANON.get(a)||'').localeCompare(SERIE_CANON.get(b)||'','fr'))];
-    if(serieS){
-      serieS.innerHTML = sList.map(sl=>{
+    if (serieElS){
+      const sSet = new Set(SEALED.map(r=>slugify(r['Série']||'')));
+      let sArr = Array.from(sSet).filter(Boolean);
+      if (selectedEraS !== 'all') sArr = sArr.filter(sl => (eraFromSlug(sl)?.key || '') === selectedEraS);
+      const sList = ['all', ...sArr.sort((a,b)=> (SERIE_CANON.get(a)||'').localeCompare(SERIE_CANON.get(b)||'','fr'))];
+      serieElS.innerHTML = sList.map(sl=>{
         const label = sl==='all' ? 'Toutes' : (SERIE_CANON.get(sl) || '');
         return `<option value="${sl}">${label}</option>`;
       }).join('');
+      const canKeepPrevSerieS = prevSerieS && prevSerieS !== 'all' && sList.includes(prevSerieS);
+      serieElS.value = canKeepPrevSerieS ? prevSerieS : 'all';
+      if (serieElS.value !== 'all'){
+        const e = eraFromSlug(serieElS.value);
+        if (e && e.key && eraElS && eraElS.value !== e.key) eraElS.value = e.key;
+      }
     }
   }
   function refreshSealedFilters(){
@@ -948,6 +970,8 @@ if (mode === 'noprice') {
 
       groups.forEach(([slug,arr])=>{
         const title = SERIE_CANON.get(slug) || 'Sans série';
+        const sym = setSymbolFromSlug(slug);
+        const ico = sym ? `<img class='set-icon' src='${sym}' alt='' aria-hidden='true'/>` : '';
         arr.sort(sortCardNumbers);
 
         // Ajoute le prix seulement quand une série précise est sélectionnée (affichage grille)
@@ -957,7 +981,7 @@ if (mode === 'noprice') {
           annotateRowsWithPrices(slug, arr);
         }
 
-        html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${escapeHtml(title)} <span class='hint'>(${arr.length} cartes)</span></h3><div class='grid'>`;
+        html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'>${ico}${escapeHtml(title)} <span class='hint'>(${arr.length} cartes)</span></h3><div class='grid'>`;
 arr.forEach(r=>{
   const url = r['Image URL'] || r['Image'] || '';
   const img = url ? `<img loading='lazy' decoding='async' src='${url}' alt='${escapeHtml(r['Nom']||'')}'/>` : '';
@@ -1041,10 +1065,12 @@ const gradedBadge = (gradedVal !== 0)
       let html = '';
       groups.forEach(([slug, arr]) => {
         const title = SERIE_CANON.get(slug) || 'Sans série';
+        const sym = setSymbolFromSlug(slug);
+        const ico = sym ? `<img class="set-icon" src="${sym}" alt="" aria-hidden="true"/>` : '';
         html += `
           <div class="section">
             <h3 style="margin:0 4px 12px 4px;font-size:16px;">
-              ${escapeHtml(title)} <span class="hint">(${arr.length})</span>
+              ${ico}${escapeHtml(title)} <span class="hint">(${arr.length})</span>
             </h3>
             <div class="grid sealed-grid">`;
 arr.forEach(r => {

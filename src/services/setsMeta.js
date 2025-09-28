@@ -98,3 +98,11 @@ export function eraFromSlug(slug) {
   return eraFromSetId(id);
 }
 
+export function setSymbolFromSetId(setId){
+  if (!setId) return '';
+  return META?.byId?.[String(setId)]?.symbol || '';
+}
+export function setSymbolFromSlug(slug){
+  const id = getSetIdFromSlug(slug);
+  return setSymbolFromSetId(id);
+}
