@@ -225,15 +225,21 @@ function initApp(){
     const slugs = Array.from(new Set(CARDS.map(r => slugify(r['Série'] || '')).filter(Boolean)));
     const setIds = new Set();
     for (const sl of slugs){
+      // Detect subsets actually used in the CSV for this slug
+      const rowsForSlug = CARDS.filter(r => slugify(r['Série'] || '') === sl);
+      const hasGG = rowsForSlug.some(r => /^GG\d+/i.test(String(r['Numéro']||'').trim()));
+      const hasTG = rowsForSlug.some(r => /^TG\d+/i.test(String(r['Numéro']||'').trim()));
+      const hasSV = rowsForSlug.some(r => /^(SV\d+|SV\d+\/\d+)/i.test(String(r['Numéro']||'').trim()));
+
       const mainId0 = getSetIdFromSlug(sl);
       const ggId0   = getSetIdFromSlug(`${sl}-gg`);
       const tgId0   = getSetIdFromSlug(`${sl}-tg`);
       const svId0   = getSetIdFromSlug(`${sl}-sv`);
 
       const mainId = mainId0 || null;
-      const ggId   = ggId0 || (mainId ? `${mainId}gg` : null);
-      const tgId   = tgId0 || (mainId ? `${mainId}tg` : null);
-      const svId   = svId0 || (mainId ? `${mainId}sv` : null);
+      const ggId   = ggId0 || (mainId && hasGG ? `${mainId}gg` : null);
+      const tgId   = tgId0 || (mainId && hasTG ? `${mainId}tg` : null);
+      const svId   = svId0 || (mainId && hasSV ? `${mainId}sv` : null);
       [mainId, ggId, tgId, svId].forEach(id => { if (id) setIds.add(id); });
     }
 
@@ -296,12 +302,21 @@ const pRev  = e => Number(e?.reverseTrend ?? 0) || pNorm(e);
     const ggId0   = getSetIdFromSlug(`${slug}-gg`);
     const tgId0   = getSetIdFromSlug(`${slug}-tg`);
     const svId0   = getSetIdFromSlug(`${slug}-sv`);
+    // Detect subsets usage within the provided rows
+    const hasGG = arr.some(r => /^GG\d+/i.test(String(r['Numéro']||'').trim()));
+    const hasTG = arr.some(r => /^TG\d+/i.test(String(r['Numéro']||'').trim()));
+    const hasSV = arr.some(r => /^(SV\d+|SV\d+\/\d+)/i.test(String(r['Numéro']||'').trim()));
     const mainId = mainId0 || null;
-    const ggId   = ggId0 || (mainId ? `${mainId}gg` : null);
-    const tgId   = tgId0 || (mainId ? `${mainId}tg` : null);
-    const svId   = svId0 || (mainId ? `${mainId}sv` : null);
+    const ggId   = ggId0 || (mainId && hasGG ? `${mainId}gg` : null);
+    const tgId   = tgId0 || (mainId && hasTG ? `${mainId}tg` : null);
+    const svId   = svId0 || (mainId && hasSV ? `${mainId}sv` : null);
 
-    const [dMain, dGG, dTG, dSV] = await Promise.all([ getSetPrices(mainId), getSetPrices(ggId), getSetPrices(tgId), getSetPrices(svId) ]);
+    const [dMain, dGG, dTG, dSV] = await Promise.all([
+      getSetPrices(mainId),
+      getSetPrices(ggId),
+      getSetPrices(tgId),
+      getSetPrices(svId)
+    ]);
     const itemsMain = unwrap(dMain) || null;
     const itemsGG   = unwrap(dGG)   || null;
     const itemsTG   = unwrap(dTG)   || null;
