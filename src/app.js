@@ -41,8 +41,6 @@ function initApp(){
   let SERIE_CANON = new Map();
   let ERA_CANON = new Map(); // key -> label
 
-  updateLastUpdatedBanner();
-
   /* ====================== ONGLET NAV ====================== */
   const tabs = document.querySelectorAll('.tab');
   tabs.forEach(t => t.addEventListener('click', () => {
