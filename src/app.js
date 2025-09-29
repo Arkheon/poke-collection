@@ -939,15 +939,6 @@ async function computeKPIsAsync(){
     const elTotal = document.getElementById('kpi-total-value');
     if (elTotal) elTotal.textContent = nf_eur.format(k.totalValue);
 
-    const elTotalNote = document.getElementById('kpi-total-note');
-    if (elTotalNote){
-      const parts = [];
-      if (k.srcCards)  parts.push(`cartes: ${k.srcCards}`);
-      if (k.srcGraded && k.srcGraded !== 'aucun prix') parts.push(`gradées: ${k.srcGraded}`);
-      if (k.srcSealed && k.srcSealed !== 'aucun prix') parts.push(`scellés: ${k.srcSealed}`);
-      elTotalNote.textContent = parts.length ? `Basée sur ${parts.join(' · ')}` : 'Basée sur avg30 (si dispo)';
-    }
-
     // Cartes
     const elCardsCount  = document.getElementById('kpi-cards-count');
     const elCardsPriced = document.getElementById('kpi-cards-priced');
