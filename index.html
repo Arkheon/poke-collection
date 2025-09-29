@@ -47,7 +47,7 @@
       <p class="lede">Vente en un seul lot : cartes, items scellés et cartes gradées. Estimations de prix (avg7/avg30) et indicateurs de complétion par série pour une vision claire de la collection.</p>
 
       <div class="hero-actions">
-        <a class="btn primary hero-cta" href="mailto:collection@arkheon.fr?subject=Offre%20achat%20collection%20Pok%C3%A9mon">Demander une offre</a>
+        <a class="btn primary hero-cta" href="#contact">Demander une offre</a>
         <a class="btn outline" href="./cartes.csv" download>Télécharger l’inventaire (.csv)</a>
       </div>
     </div>
@@ -78,9 +78,9 @@
           </div>
         </div>
 
-        <div class="hero-update" id="last-updated-banner" hidden>
-          <span class="hero-update-label">Dernière mise à jour</span>
-          <span class="hero-update-value" id="last-updated-text">—</span>
+        <div class="hero-mini hero-mini--update" id="last-updated-banner" hidden>
+          <span class="hero-mini-title">Dernière mise à jour</span>
+          <span class="hero-mini-sub hero-mini-sub--value" id="last-updated-text">—</span>
         </div>
       </div>
 
@@ -118,15 +118,16 @@
       </div>
     </div>
 
-    <div class="hero-tabs">
-      <nav class="tabs" role="tablist" aria-label="Sections">
-        <div class="tab active" data-tab="cards" role="tab" tabindex="0" aria-selected="true">Cartes</div>
-        <div class="tab" data-tab="sealed" role="tab" tabindex="0" aria-selected="false">Scellés</div>
-        <div class="tab" data-tab="graded" role="tab" tabindex="0" aria-selected="false">Gradées</div>
-        <div class="tab" data-tab="stats" role="tab" tabindex="0" aria-selected="false">Stats</div>
-      </nav>
-    </div>
   </div>
+</section>
+
+<section class="main-nav">
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <div class="tab active" data-tab="cards" role="tab" tabindex="0" aria-selected="true">Cartes</div>
+    <div class="tab" data-tab="sealed" role="tab" tabindex="0" aria-selected="false">Scellés</div>
+    <div class="tab" data-tab="graded" role="tab" tabindex="0" aria-selected="false">Gradées</div>
+    <div class="tab" data-tab="stats" role="tab" tabindex="0" aria-selected="false">Stats</div>
+  </nav>
 </section>
 
   <main>
@@ -249,6 +250,31 @@
     </section>
 
   </main>
+
+  <section class="contact-section" id="contact">
+    <div class="contact-card">
+      <h3>Prendre contact</h3>
+      <p>Vous souhaitez recevoir un devis ou organiser une visio de présentation&nbsp;? Laissez vos coordonnées et un message, je vous réponds sous 24&nbsp;heures.</p>
+      <form class="contact-form">
+        <div class="contact-row">
+          <label for="contact-name">Nom</label>
+          <input id="contact-name" name="name" type="text" autocomplete="name" placeholder="Votre nom" required>
+        </div>
+        <div class="contact-row">
+          <label for="contact-email">Email</label>
+          <input id="contact-email" name="email" type="email" autocomplete="email" placeholder="vous@example.com" required>
+        </div>
+        <div class="contact-row contact-row--full">
+          <label for="contact-message">Message</label>
+          <textarea id="contact-message" name="message" rows="4" placeholder="Présentez votre projet ou vos questions..." required></textarea>
+        </div>
+        <div class="contact-actions">
+          <button type="submit" class="btn primary">Envoyer</button>
+          <a class="btn outline" href="mailto:collection@arkheon.fr?subject=Collection%20Pok%C3%A9mon">Ou me contacter par email</a>
+        </div>
+      </form>
+    </div>
+  </section>
 
   <script type="application/ld+json">
   {
