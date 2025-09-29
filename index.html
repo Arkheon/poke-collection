@@ -52,83 +52,92 @@
       </div>
     </div>
 
-    <div class="hero-grid">
-      <div class="hero-card hero-card--highlight">
-        <span class="hero-card-ico">🧾</span>
-        <div>
-          <div class="hero-card-title">Inventaire structuré</div>
-          <p>Données normalisées, photos HD et raretés identifiées pour chaque carte.</p>
+    <div class="hero-body">
+      <div class="hero-column hero-column--info">
+        <div class="hero-highlight-list">
+          <div class="hero-mini">
+            <span class="hero-mini-ico">🧾</span>
+            <div>
+              <div class="hero-mini-title">Inventaire structuré</div>
+              <p>Données normalisées, photos HD et raretés identifiées pour chaque carte.</p>
+            </div>
+          </div>
+          <div class="hero-mini">
+            <span class="hero-mini-ico">🔒</span>
+            <div>
+              <div class="hero-mini-title">Transaction sécurisée</div>
+              <p>Remise en main propre ou expédition suivie et assurée.</p>
+            </div>
+          </div>
+          <div class="hero-mini">
+            <span class="hero-mini-ico">⚡️</span>
+            <div>
+              <div class="hero-mini-title">Support réactif</div>
+              <p>Visio de présentation possible, réponse garantie sous 24&nbsp;h.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-meta">
+          <div class="hero-meta-pills">
+            <span class="hero-pill">✔️ Authenticité contrôlée</span>
+            <span class="hero-pill">📦 Doubles et scellés inclus</span>
+          </div>
+          <div class="hero-update" id="last-updated-banner" hidden>
+            <span class="hero-update-label">Dernière mise à jour</span>
+            <span class="hero-update-value" id="last-updated-text">—</span>
+          </div>
         </div>
       </div>
-      <div class="hero-card hero-card--highlight">
-        <span class="hero-card-ico">🔒</span>
-        <div>
-          <div class="hero-card-title">Transaction sécurisée</div>
-          <p>Remise en main propre ou expédition suivie et assurée.</p>
-        </div>
-      </div>
-      <div class="hero-card hero-card--highlight">
-        <span class="hero-card-ico">⚡️</span>
-        <div>
-          <div class="hero-card-title">Support réactif</div>
-          <p>Visio de présentation possible, réponse garantie sous 24&nbsp;h.</p>
-        </div>
-      </div>
-      <div class="hero-card hero-card--kpi">
-        <span class="hero-card-ico">🪙</span>
-        <div>
-          <div class="hero-card-title">Valeur estimée</div>
-          <div class="hero-card-value" id="kpi-total-value">—</div>
-          <div class="hero-card-sub" id="kpi-total-note">Basée sur avg30 (si dispo)</div>
-        </div>
-      </div>
-      <div class="hero-card hero-card--kpi">
-        <span class="hero-card-ico">📊</span>
-        <div>
-          <div class="hero-card-title">Cartes suivies</div>
-          <div class="hero-card-value" id="kpi-cards-count">—</div>
-          <div class="hero-card-sub">Prix dispo : <span id="kpi-cards-priced">—</span> / <span id="kpi-cards-total">—</span></div>
-        </div>
-      </div>
-      <div class="hero-card hero-card--kpi">
-        <span class="hero-card-ico">📦</span>
-        <div>
-          <div class="hero-card-title">Items scellés</div>
-          <div class="hero-card-value" id="kpi-sealed-count">—</div>
-          <div class="hero-card-sub">Est. <span id="kpi-sealed-value">—</span></div>
-        </div>
-      </div>
-      <div class="hero-card hero-card--kpi">
-        <span class="hero-card-ico">🛡️</span>
-        <div>
-          <div class="hero-card-title">Cartes gradées</div>
-          <div class="hero-card-value" id="kpi-graded-count">—</div>
-          <div class="hero-card-sub">Est. <span id="kpi-graded-value">—</span></div>
+
+      <div class="hero-column hero-column--metrics">
+        <div class="hero-metrics">
+          <div class="hero-card hero-card--kpi">
+            <span class="hero-card-ico">🪙</span>
+            <div>
+              <div class="hero-card-title">Valeur estimée</div>
+              <div class="hero-card-value" id="kpi-total-value">—</div>
+              <div class="hero-card-sub" id="kpi-total-note">Basée sur avg30 (si dispo)</div>
+            </div>
+          </div>
+          <div class="hero-card hero-card--kpi">
+            <span class="hero-card-ico">📊</span>
+            <div>
+              <div class="hero-card-title">Cartes suivies</div>
+              <div class="hero-card-value" id="kpi-cards-count">—</div>
+              <div class="hero-card-sub">Prix dispo : <span id="kpi-cards-priced">—</span> / <span id="kpi-cards-total">—</span></div>
+            </div>
+          </div>
+          <div class="hero-card hero-card--kpi">
+            <span class="hero-card-ico">📦</span>
+            <div>
+              <div class="hero-card-title">Items scellés</div>
+              <div class="hero-card-value" id="kpi-sealed-count">—</div>
+              <div class="hero-card-sub">Est. <span id="kpi-sealed-value">—</span></div>
+            </div>
+          </div>
+          <div class="hero-card hero-card--kpi">
+            <span class="hero-card-ico">🛡️</span>
+            <div>
+              <div class="hero-card-title">Cartes gradées</div>
+              <div class="hero-card-value" id="kpi-graded-count">—</div>
+              <div class="hero-card-sub">Est. <span id="kpi-graded-value">—</span></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="hero-meta">
-      <div class="hero-meta-pills">
-        <span class="hero-pill">✔️ Authenticité contrôlée</span>
-        <span class="hero-pill">📦 Doubles et scellés inclus</span>
-      </div>
-      <div class="hero-update" id="last-updated-banner" hidden>
-        <span class="hero-update-label">Dernière mise à jour</span>
-        <span class="hero-update-value" id="last-updated-text">—</span>
-      </div>
+    <div class="hero-tabs">
+      <nav class="tabs" role="tablist" aria-label="Sections">
+        <div class="tab active" data-tab="cards" role="tab" tabindex="0" aria-selected="true">Cartes</div>
+        <div class="tab" data-tab="sealed" role="tab" tabindex="0" aria-selected="false">Scellés</div>
+        <div class="tab" data-tab="graded" role="tab" tabindex="0" aria-selected="false">Gradées</div>
+        <div class="tab" data-tab="stats" role="tab" tabindex="0" aria-selected="false">Stats</div>
+      </nav>
     </div>
   </div>
 </section>
-
-
-  <!-- Tabs -->
-  <nav class="tabs" role="tablist" aria-label="Sections">
-    <div class="tab active" data-tab="cards" role="tab" tabindex="0" aria-selected="true">Cartes</div>
-    <div class="tab" data-tab="sealed" role="tab" tabindex="0" aria-selected="false">Scellés</div>
-    <div class="tab" data-tab="graded" role="tab" tabindex="0" aria-selected="false">Gradées</div>
-    <div class="tab" data-tab="stats" role="tab" tabindex="0" aria-selected="false">Stats</div>
-  </nav>
 
   <main>
 
