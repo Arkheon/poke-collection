@@ -702,6 +702,18 @@ const pRev  = e => Number(e?.reverseTrend ?? 0) || pNorm(e);
     const n = parseInt(String(v).replace(/\s/g,''), 10);
     return Number.isFinite(n) ? Math.max(0, n) : 0;
   }
+  const ALLOWED_IMG_PROTOCOLS = new Set(['http:', 'https:']);
+  function sanitizeImageUrl(value){
+    const raw = String(value ?? '').trim();
+    if (!raw) return '';
+    if (/^data:image\//i.test(raw)) return raw;
+    try {
+      const url = new URL(raw, location.href);
+      if (ALLOWED_IMG_PROTOCOLS.has(url.protocol)) return url.href;
+    } catch {}
+    if (/^\.{0,2}\//.test(raw) || raw.startsWith('/')) return raw;
+    return '';
+  }
   function detectPriceKey(rows){
     const candidates = [
       { keys: ['avg30','Avg30','AVG30','Moy30','30j','Prix 30 jours','Average30'], label: 'avg30' },
@@ -993,8 +1005,9 @@ if (mode === 'noprice') {
 
         html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'><span class='s-title-text'>${escapeHtml(title)} <span class='hint'>(${arr.length} cartes)</span></span></h3><div class='grid'>`;
 arr.forEach(r=>{
-  const url = r['Image URL'] || r['Image'] || '';
-  const img = url ? `<img loading='lazy' decoding='async' src='${url}' alt='${escapeHtml(r['Nom']||'')}'/>` : '';
+  const rawUrl = r['Image URL'] || r['Image'] || '';
+  const safeUrl = sanitizeImageUrl(rawUrl);
+  const img = safeUrl ? `<img loading='lazy' decoding='async' src='${escapeHtml(safeUrl)}' alt='${escapeHtml(r['Nom']||'')}'/>` : '';
   const qte = ownedQty(r);
   const prix = r['Prix'] ? String(r['Prix']) : null;
 
@@ -1082,7 +1095,8 @@ const gradedBadge = (gradedVal !== 0)
             </h3>
             <div class="grid sealed-grid">`;
 arr.forEach(r => {
-  const url = r['Image'] || '';
+  const rawUrl = r['Image'] || '';
+  const safeUrl = sanitizeImageUrl(rawUrl);
   const type = r['Type'] || 'Item';
   const detail = r['Détail'] || '';
   const com = r['Commentaires'] || '';
@@ -1094,7 +1108,7 @@ arr.forEach(r => {
   html += `
     <div class="sealed-card">
       <div class="sealed-thumb">
-        ${url ? `<img loading="lazy" decoding="async" src="${url}" alt="${escapeHtml(type)}"/>`
+        ${safeUrl ? `<img loading="lazy" decoding="async" src="${escapeHtml(safeUrl)}" alt="${escapeHtml(type)}"/>`
               : `<span class="noimg hint">(pas d'image)</span>`}
       </div>
       <div class="sealed-meta">
@@ -1165,7 +1179,9 @@ arr.forEach(r => {
 
       let html = `<div class="grid">`;
       rows.forEach(r=>{
-        const img = r['Image'] ? `<img loading="lazy" decoding="async" src="${r['Image']}" alt="${escapeHtml(r['Nom']||'Carte gradée')}">` : '';
+        const rawImg = r['Image'] || '';
+        const safeImg = sanitizeImageUrl(rawImg);
+        const img = safeImg ? `<img loading="lazy" decoding="async" src="${escapeHtml(safeImg)}" alt="${escapeHtml(r['Nom']||'Carte gradée')}">` : '';
         const nom = r['Nom'] || 'Carte gradée';
         const comp = r['Société'] || '?';
         const note = r['Note'] ? String(r['Note']) : null;
