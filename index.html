@@ -42,7 +42,7 @@
 
 <section class="hero-2025">
   <div class="hero-inner">
-    <div class="hero-col hero-col--intro">
+    <div class="hero-head">
       <h2>Collection Pokémon complète — <span class="txt-gradient">showcase 2025</span></h2>
       <p class="lede">Vente en un seul lot : cartes, items scellés et cartes gradées. Estimations de prix (avg7/avg30) et indicateurs de complétion par série pour une vision claire de la collection.</p>
 
@@ -50,112 +50,73 @@
         <a class="btn primary hero-cta" href="mailto:collection@arkheon.fr?subject=Offre%20achat%20collection%20Pok%C3%A9mon">Demander une offre</a>
         <a class="btn outline" href="./cartes.csv" download>Télécharger l’inventaire (.csv)</a>
       </div>
+    </div>
 
-      <div class="hero-highlights">
-        <div class="hero-tile">
-          <span class="hero-tile-ico">🧾</span>
-          <div>
-            <div class="hero-tile-title">Inventaire structuré</div>
-            <p>Données normalisées, photos HD et raretés identifiées pour chaque carte.</p>
-          </div>
-        </div>
-        <div class="hero-tile">
-          <span class="hero-tile-ico">🔒</span>
-          <div>
-            <div class="hero-tile-title">Transaction sécurisée</div>
-            <p>Remise en main propre ou expédition suivie et assurée.</p>
-          </div>
-        </div>
-        <div class="hero-tile">
-          <span class="hero-tile-ico">⚡️</span>
-          <div>
-            <div class="hero-tile-title">Support réactif</div>
-            <p>Visio de présentation possible, réponse garantie sous 24&nbsp;h.</p>
-          </div>
+    <div class="hero-grid">
+      <div class="hero-card hero-card--highlight">
+        <span class="hero-card-ico">🧾</span>
+        <div>
+          <div class="hero-card-title">Inventaire structuré</div>
+          <p>Données normalisées, photos HD et raretés identifiées pour chaque carte.</p>
         </div>
       </div>
-
-      <div class="hero-meta">
-        <div class="hero-meta-pills">
-          <span class="hero-pill">✔️ Authenticité contrôlée</span>
-          <span class="hero-pill">📦 Doubles et scellés inclus</span>
+      <div class="hero-card hero-card--highlight">
+        <span class="hero-card-ico">🔒</span>
+        <div>
+          <div class="hero-card-title">Transaction sécurisée</div>
+          <p>Remise en main propre ou expédition suivie et assurée.</p>
         </div>
-        <div class="hero-update" id="last-updated-banner" hidden>
-          <span class="hero-update-label">Dernière mise à jour</span>
-          <span class="hero-update-value" id="last-updated-text">—</span>
+      </div>
+      <div class="hero-card hero-card--highlight">
+        <span class="hero-card-ico">⚡️</span>
+        <div>
+          <div class="hero-card-title">Support réactif</div>
+          <p>Visio de présentation possible, réponse garantie sous 24&nbsp;h.</p>
+        </div>
+      </div>
+      <div class="hero-card hero-card--kpi">
+        <span class="hero-card-ico">🪙</span>
+        <div>
+          <div class="hero-card-title">Valeur estimée</div>
+          <div class="hero-card-value" id="kpi-total-value">—</div>
+          <div class="hero-card-sub" id="kpi-total-note">Basée sur avg30 (si dispo)</div>
+        </div>
+      </div>
+      <div class="hero-card hero-card--kpi">
+        <span class="hero-card-ico">📊</span>
+        <div>
+          <div class="hero-card-title">Cartes suivies</div>
+          <div class="hero-card-value" id="kpi-cards-count">—</div>
+          <div class="hero-card-sub">Prix dispo : <span id="kpi-cards-priced">—</span> / <span id="kpi-cards-total">—</span></div>
+        </div>
+      </div>
+      <div class="hero-card hero-card--kpi">
+        <span class="hero-card-ico">📦</span>
+        <div>
+          <div class="hero-card-title">Items scellés</div>
+          <div class="hero-card-value" id="kpi-sealed-count">—</div>
+          <div class="hero-card-sub">Est. <span id="kpi-sealed-value">—</span></div>
+        </div>
+      </div>
+      <div class="hero-card hero-card--kpi">
+        <span class="hero-card-ico">🛡️</span>
+        <div>
+          <div class="hero-card-title">Cartes gradées</div>
+          <div class="hero-card-value" id="kpi-graded-count">—</div>
+          <div class="hero-card-sub">Est. <span id="kpi-graded-value">—</span></div>
         </div>
       </div>
     </div>
-    <div class="hero-col hero-col--stats">
-<div class="kpis" id="kpis">
-  <!-- Valeur totale (cartes + gradées + scellés si prix dispo) -->
-  <div class="kpi">
-    <div class="lbl">Valeur estimée</div>
-    <div class="val" id="kpi-total-value">—</div>
-    <div class="sub" id="kpi-total-note">Basée sur avg30 (si dispo)</div>
-  </div>
 
-  <!-- Cartes -->
-<div class="kpi">
-  <div class="lbl">Cartes</div>
-  <div class="val" id="kpi-cards-count">—</div>
-  <div class="sub">
-    Prix dispo : <span id="kpi-cards-priced">—</span>
-    / <span id="kpi-cards-total">—</span>
-  </div>
-</div>
-
-
-  <!-- Scellés -->
-  <div class="kpi">
-    <div class="lbl">Items scellés</div>
-    <div class="val" id="kpi-sealed-count">—</div>
-    <div class="sub">Est. <span id="kpi-sealed-value">—</span></div>
-  </div>
-
-  <!-- Gradées -->
-  <div class="kpi">
-    <div class="lbl">Cartes gradées</div>
-    <div class="val" id="kpi-graded-count">—</div>
-    <div class="sub">Est. <span id="kpi-graded-value">—</span></div>
-  </div>
-</div>
-
-      <div class="hero-highlight-panels">
-        <div class="hero-panel">
-          <span class="hero-panel-ico">🪙</span>
-          <div>
-            <div class="hero-panel-title">Valeur estimée</div>
-            <div class="hero-panel-value" id="kpi-total-value-alt">—</div>
-            <div class="hero-panel-sub" id="kpi-total-note-alt">Basée sur avg30 (si dispo)</div>
-          </div>
-        </div>
-        <div class="hero-panel">
-          <span class="hero-panel-ico">📊</span>
-          <div>
-            <div class="hero-panel-title">Cartes suivies</div>
-            <div class="hero-panel-value" id="kpi-cards-count-alt">—</div>
-            <div class="hero-panel-sub">Prix dispo : <span id="kpi-cards-priced-alt">—</span> / <span id="kpi-cards-total-alt">—</span></div>
-          </div>
-        </div>
-        <div class="hero-panel">
-          <span class="hero-panel-ico">📦</span>
-          <div>
-            <div class="hero-panel-title">Items scellés</div>
-            <div class="hero-panel-value" id="kpi-sealed-count-alt">—</div>
-            <div class="hero-panel-sub">Est. <span id="kpi-sealed-value-alt">—</span></div>
-          </div>
-        </div>
-        <div class="hero-panel">
-          <span class="hero-panel-ico">🛡️</span>
-          <div>
-            <div class="hero-panel-title">Cartes gradées</div>
-            <div class="hero-panel-value" id="kpi-graded-count-alt">—</div>
-            <div class="hero-panel-sub">Est. <span id="kpi-graded-value-alt">—</span></div>
-          </div>
-        </div>
+    <div class="hero-meta">
+      <div class="hero-meta-pills">
+        <span class="hero-pill">✔️ Authenticité contrôlée</span>
+        <span class="hero-pill">📦 Doubles et scellés inclus</span>
       </div>
-
+      <div class="hero-update" id="last-updated-banner" hidden>
+        <span class="hero-update-label">Dernière mise à jour</span>
+        <span class="hero-update-value" id="last-updated-text">—</span>
+      </div>
     </div>
   </div>
 </section>

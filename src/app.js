@@ -938,20 +938,14 @@ async function computeKPIsAsync(){
     // Valeur totale
     const elTotal = document.getElementById('kpi-total-value');
     if (elTotal) elTotal.textContent = nf_eur.format(k.totalValue);
-    const elTotalAlt = document.getElementById('kpi-total-value-alt');
-    elTotalAlt && (elTotalAlt.textContent = nf_eur.format(k.totalValue));
 
     const elTotalNote = document.getElementById('kpi-total-note');
-    const elTotalNoteAlt = document.getElementById('kpi-total-note-alt');
     if (elTotalNote){
       const parts = [];
       if (k.srcCards)  parts.push(`cartes: ${k.srcCards}`);
       if (k.srcGraded && k.srcGraded !== 'aucun prix') parts.push(`gradées: ${k.srcGraded}`);
       if (k.srcSealed && k.srcSealed !== 'aucun prix') parts.push(`scellés: ${k.srcSealed}`);
-      elTotalNote.textContent = parts.length ? `Basée sur ${parts.join(' · ')}` : 'Aucune colonne prix trouvée';
-      if (elTotalNoteAlt) elTotalNoteAlt.textContent = elTotalNote.textContent;
-    } else if (elTotalNoteAlt){
-      elTotalNoteAlt.textContent = 'Basée sur avg30 (si dispo)';
+      elTotalNote.textContent = parts.length ? `Basée sur ${parts.join(' · ')}` : 'Basée sur avg30 (si dispo)';
     }
 
     // Cartes
@@ -961,32 +955,18 @@ async function computeKPIsAsync(){
     elCardsCount  && (elCardsCount.textContent  = nf_int.format(k.cCards));
     elCardsPriced && (elCardsPriced.textContent = nf_int.format(k.cardsPricedQty));
     elCardsTotal  && (elCardsTotal.textContent  = nf_int.format(k.cardsTotalQty));
-    const elCardsCountAlt  = document.getElementById('kpi-cards-count-alt');
-    const elCardsPricedAlt = document.getElementById('kpi-cards-priced-alt');
-    const elCardsTotalAlt  = document.getElementById('kpi-cards-total-alt');
-    elCardsCountAlt  && (elCardsCountAlt.textContent  = nf_int.format(k.cCards));
-    elCardsPricedAlt && (elCardsPricedAlt.textContent = nf_int.format(k.cardsPricedQty));
-    elCardsTotalAlt  && (elCardsTotalAlt.textContent  = nf_int.format(k.cardsTotalQty));
 
     // Scellés
     const elSealedCount = document.getElementById('kpi-sealed-count');
     const elSealedValue = document.getElementById('kpi-sealed-value');
     elSealedCount && (elSealedCount.textContent = nf_int.format(k.cSealed));
     elSealedValue && (elSealedValue.textContent = nf_eur.format(k.vSealed || 0));
-    const elSealedCountAlt = document.getElementById('kpi-sealed-count-alt');
-    const elSealedValueAlt = document.getElementById('kpi-sealed-value-alt');
-    elSealedCountAlt && (elSealedCountAlt.textContent = nf_int.format(k.cSealed));
-    elSealedValueAlt && (elSealedValueAlt.textContent = nf_eur.format(k.vSealed || 0));
 
     // Gradées
     const elGradedCount = document.getElementById('kpi-graded-count');
     const elGradedValue = document.getElementById('kpi-graded-value');
     elGradedCount && (elGradedCount.textContent = nf_int.format(k.cGraded));
     elGradedValue && (elGradedValue.textContent = nf_eur.format(k.vGraded || 0));
-    const elGradedCountAlt = document.getElementById('kpi-graded-count-alt');
-    const elGradedValueAlt = document.getElementById('kpi-graded-value-alt');
-    elGradedCountAlt && (elGradedCountAlt.textContent = nf_int.format(k.cGraded));
-    elGradedValueAlt && (elGradedValueAlt.textContent = nf_eur.format(k.vGraded || 0));
   }
 
   /* ====================== RENDER ====================== */
