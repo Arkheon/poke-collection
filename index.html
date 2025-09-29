@@ -4,7 +4,17 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Ma collection Pokémon — Showcase</title>
- <link rel="stylesheet" href="./styles/app.css?v=2">
+  <meta name="description" content="Collection complète de cartes Pokémon : cartes à l’unité, scellés et gradées disponibles en un seul lot, avec statistiques et estimations de prix.">
+  <link rel="canonical" href="https://arkheon.github.io/poke-collection/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Collection Pokémon – Vente en lot complet">
+  <meta property="og:description" content="Explorez ma collection Pokémon : cartes, items scellés et cartes gradées, valorisées par série. Contactez-moi pour une offre globale.">
+  <meta property="og:url" content="https://arkheon.github.io/poke-collection/">
+  <meta property="og:image" content="https://images.pokemontcg.io/sv3/fr/1_hires.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Collection Pokémon – Vente en lot complet">
+  <meta name="twitter:description" content="Vente en un lot : cartes, scellés et gradées avec estimation en euros.">
+ <link rel="stylesheet" href="./styles/app.css?v=3">
   <!-- Favicon inline pour éviter un 404 sur /favicon.ico -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230b1020'/%3E%3Ccircle cx='32' cy='32' r='22' fill='%23fff' opacity='.12'/%3E%3Ccircle cx='32' cy='32' r='16' fill='%237c3aed'/%3E%3Ccircle cx='32' cy='32' r='6' fill='%23e2e8f0'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -24,8 +34,8 @@
         <h1>Poké Collection — Vitrine</h1>
       </div>
       <div class="bar">
-        <button class="btn ghost" onclick="document.getElementById('panel-cards').scrollIntoView({behavior:'smooth'})">Catalogue</button>
-        <button class="btn primary" onclick="alert('Contact / Faire une offre — à brancher')">Acheter l’intégralité</button>
+        <a class="btn ghost" href="#panel-cards">Catalogue</a>
+        <a class="btn primary" href="mailto:collection@arkheon.fr?subject=Offre%20achat%20collection%20Pok%C3%A9mon">Acheter l’intégralité</a>
       </div>
     </div>
   </header>
@@ -36,13 +46,17 @@
       <h2>Collection Pokémon complète — <span class="txt-gradient">showcase 2025</span></h2>
       <p class="lede">Vente en un seul lot : cartes, items scellés et cartes gradées. Données de prix (avg7/avg30) + stats de complétion par série.</p>
       <div class="hero-ctas">
-        <button class="btn primary" onclick="alert('Contact / Faire une offre — à brancher')">Me contacter</button>
-        <button class="btn" onclick="alert('Export inventaire — à brancher')">Télécharger l’inventaire (CSV)</button>
+        <a class="btn primary" href="mailto:collection@arkheon.fr?subject=Offre%20achat%20collection%20Pok%C3%A9mon">Me contacter</a>
+        <a class="btn" href="./cartes.csv" download>Télécharger l’inventaire (CSV)</a>
       </div>
       <div class="trust">
         <span class="pill">✔️ Authenticité vérifiée</span>
         <span class="pill">🔒 Livraison sécurisée / remise</span>
         <span class="pill">💬 Réponse rapide</span>
+      </div>
+      <div class="update-banner" id="last-updated-banner" hidden>
+        <span class="update-label">Dernière mise à jour</span>
+        <span class="update-value" id="last-updated-text">—</span>
       </div>
     </div>
     <div class="hero-col">
@@ -121,6 +135,13 @@
               <option value="all">Toutes</option>
             </select>
           </div>
+          <div class="col">
+            <label for="layout">Affichage</label>
+            <select id="layout">
+              <option value="grid">Grille visuelle</option>
+              <option value="list">Liste compacte</option>
+            </select>
+          </div>
           <div class="col span-2">
             <label>Raretés</label>
             <div class="multi">
@@ -182,6 +203,20 @@
       <div id="stats-root" class="section"></div>
     </section>
 
+    <section class="panel" id="conditions">
+      <div class="card">
+        <h3>Conditions de vente</h3>
+        <div class="section">
+          <ul class="conditions-list">
+            <li>Vente en un seul lot (cartes, scellés, gradées). Rendez-vous visio ou devis détaillé possible.</li>
+            <li>Remise en main propre privilégiée en France métropolitaine, expédition sécurisée avec assurance sur demande.</li>
+            <li>Paiement par virement bancaire ou escrow sécurisé. Facture disponible.</li>
+            <li>Inventaire actualisé fourni (CSV) avec estimation basée sur les prix moyens du marché (avg7/avg30).</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
     <!-- Uploads (optionnels) -->
     <section class="uploads">
       <div class="card">
@@ -206,6 +241,23 @@
     </section>
 
   </main>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ProductCollection",
+    "name": "Collection Pokémon – Vente en lot complet",
+    "description": "Collection complète de cartes Pokémon : cartes à l’unité, scellés et cartes gradées disponibles en un seul lot.",
+    "url": "https://arkheon.github.io/poke-collection/",
+    "offers": {
+      "@type": "Offer",
+      "availability": "https://schema.org/InStock",
+      "priceCurrency": "EUR",
+      "price": "0",
+      "url": "mailto:collection@arkheon.fr?subject=Offre%20achat%20collection%20Pok%C3%A9mon"
+    }
+  }
+  </script>
 
   <!-- Modal image viewer -->
   <div id="imgModal" class="modal" aria-hidden="true">

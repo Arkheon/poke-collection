@@ -41,6 +41,8 @@ function initApp(){
   let SERIE_CANON = new Map();
   let ERA_CANON = new Map(); // key -> label
 
+  updateLastUpdatedBanner();
+
   /* ====================== ONGLET NAV ====================== */
   const tabs = document.querySelectorAll('.tab');
   tabs.forEach(t => t.addEventListener('click', () => {
@@ -125,11 +127,59 @@ function initApp(){
   /* ====================== DONNÉES ====================== */
   let CARDS=[], SEALED=[], GRADED=[];
   const AUTO_SOURCES={ cards:'cartes.csv', sealed:'scelle.csv', graded:'gradees.csv' };
+  const LAST_UPDATED={ cards:null, sealed:null, graded:null };
+  const LAST_UPDATED_SOURCE={ cards:null, sealed:null, graded:null };
+  const nf_datetime = new Intl.DateTimeFormat('fr-FR',{ dateStyle:'long', timeStyle:'short' });
 
-  function loadCsvFromUrl(url, cb, onError){
+  function parseHttpDate(value){
+    if (!value) return null;
+    const d = new Date(value);
+    return Number.isNaN(d.valueOf()) ? null : d;
+  }
+  function registerLastUpdated(key, date, source='auto'){
+    if (!(key in LAST_UPDATED)) return;
+    const safeDate = (date instanceof Date && !Number.isNaN(date.valueOf())) ? date : new Date();
+    LAST_UPDATED[key] = safeDate;
+    LAST_UPDATED_SOURCE[key] = source;
+    updateLastUpdatedBanner();
+  }
+  function updateLastUpdatedBanner(){
+    const banner = document.getElementById('last-updated-banner');
+    const textEl = document.getElementById('last-updated-text');
+    if (!banner || !textEl) return;
+    const items = Object.entries(LAST_UPDATED)
+      .filter(([,d]) => d instanceof Date && !Number.isNaN(d.valueOf()))
+      .sort((a,b)=> b[1] - a[1]);
+    if (!items.length){
+      banner.hidden = true;
+      textEl.textContent = '—';
+      return;
+    }
+    const labelFor = key => key==='cards' ? 'Cartes' : key==='sealed' ? 'Scellés' : 'Gradées';
+    const scopeFor = key => {
+      const src = LAST_UPDATED_SOURCE[key];
+      if (src === 'upload') return 'import manuel';
+      if (src === 'demo') return 'jeu de démo';
+      return 'auto';
+    };
+    textEl.textContent = items
+      .map(([key,date])=>{
+        const formatted = nf_datetime.format(date);
+        const scope = scopeFor(key);
+        return `${labelFor(key)} : ${formatted}${scope !== 'auto' ? ` (${scope})` : ''}`;
+      })
+      .join(' · ');
+    banner.hidden = false;
+  }
+
+  function loadCsvFromUrl(key, url, cb, onError){
     fetch(url,{cache:'no-store'})
-      .then(r=>{ if(!r.ok) throw new Error(r.status+" "+r.statusText); return r.text(); })
-      .then(text=>{
+      .then(r=>{
+        if(!r.ok) throw new Error(r.status+" "+r.statusText);
+        const headers = r.headers;
+        return r.text().then(text=>({ text, headers }));
+      })
+      .then(({ text, headers })=>{
         // Détection simple de faux CSV (ex: Gnumeric/XML ou binaire compressé)
         const looksGnumeric = text.startsWith('<?xml') || text.includes('<gnm:Workbook');
         const looksBinary = /\x00/.test(text);
@@ -143,6 +193,8 @@ function initApp(){
           }
           throw new Error(msg);
         }
+        const lastMod = headers ? parseHttpDate(headers.get('last-modified')) : null;
+        registerLastUpdated(key, lastMod ?? new Date(), 'auto');
         Papa.parse(text,{header:true,skipEmptyLines:true,complete:res=>cb(res.data)});
       })
       .catch(err=>{ console.warn('CSV auto-load failed for', url, err); onError && onError(err); });
@@ -151,9 +203,9 @@ function initApp(){
     rows.map(r=>Object.fromEntries(Object.entries(r).map(([k,v])=>[String(k).trim(), typeof v==='string'? v.trim(): v])));
 
   // Chargements auto (+ mise à jour KPI)
-  loadCsvFromUrl(AUTO_SOURCES.cards, rows=>{ CARDS=normalizeRows(rows); refreshSeries();PriceBook.bySet.clear();PriceBook.ready = false; render(); updateKPIs(); });
-  loadCsvFromUrl(AUTO_SOURCES.sealed, rows=>{ SEALED=normalizeRows(rows); refreshSeries();  refreshSealedFilters(); render(); updateKPIs(); });
-  loadCsvFromUrl(AUTO_SOURCES.graded, rows=>{ GRADED=normalizeRows(rows); refreshCompanies();  render(); updateKPIs(); });
+  loadCsvFromUrl('cards', AUTO_SOURCES.cards, rows=>{ CARDS=normalizeRows(rows); refreshSeries();PriceBook.bySet.clear();PriceBook.ready = false; render(); updateKPIs(); });
+  loadCsvFromUrl('sealed', AUTO_SOURCES.sealed, rows=>{ SEALED=normalizeRows(rows); refreshSeries();  refreshSealedFilters(); render(); updateKPIs(); });
+  loadCsvFromUrl('graded', AUTO_SOURCES.graded, rows=>{ GRADED=normalizeRows(rows); refreshCompanies();  render(); updateKPIs(); });
 
   // Uploads manuels
   if(SHOW_UPLOADS){
@@ -161,18 +213,21 @@ function initApp(){
       const f=e.target.files?.[0]; if(!f) return;
       Papa.parse(f,{header:true,skipEmptyLines:true,complete:res=>{
         CARDS=normalizeRows(res.data); refreshSeries(); render(); updateKPIs();
+        registerLastUpdated('cards', f.lastModified ? new Date(f.lastModified) : new Date(), 'upload');
       }});
     });
     document.getElementById('csv-sealed')?.addEventListener('change', e=>{
       const f=e.target.files?.[0]; if(!f) return;
       Papa.parse(f,{header:true,skipEmptyLines:true,complete:res=>{
         SEALED=normalizeRows(res.data); refreshSeries(); refreshSealedFilters(); render(); updateKPIs();
+        registerLastUpdated('sealed', f.lastModified ? new Date(f.lastModified) : new Date(), 'upload');
       }});
     });
     document.getElementById('csv-graded')?.addEventListener('change', e=>{
       const f=e.target.files?.[0]; if(!f) return;
       Papa.parse(f,{header:true,skipEmptyLines:true,complete:res=>{
         GRADED=normalizeRows(res.data); refreshCompanies(); render(); updateKPIs();
+        registerLastUpdated('graded', f.lastModified ? new Date(f.lastModified) : new Date(), 'upload');
       }});
     });
     document.getElementById('load-demo')?.addEventListener('click', ()=>{
@@ -184,6 +239,10 @@ function initApp(){
       SEALED=[{'Série':'151','Type':'ETB','Détail':'Exemple','Commentaires':'—','Image':'https://via.placeholder.com/400x250?text=ETB+151','Prix':'89,00'}];
       GRADED=[{'Nom':'Pikachu','Edition':'SWSH','Société':'PSA','Note':'10','Détail':'Test','Image':'https://via.placeholder.com/400x250?text=PSA+10','Prix':'120'}];
       refreshSeries(); refreshSealedFilters(); refreshCompanies(); render(); updateKPIs();
+      const now = new Date();
+      registerLastUpdated('cards', now, 'demo');
+      registerLastUpdated('sealed', now, 'demo');
+      registerLastUpdated('graded', now, 'demo');
     });
   }
 
@@ -192,12 +251,15 @@ function initApp(){
   const era=document.getElementById('era');
   const serie=document.getElementById('serie');
   const view=document.getElementById('view');
+  const layoutSel=document.getElementById('layout');
   q && (q.oninput=()=>scheduleRender(80));
   era && (era.onchange=()=>{ refreshSeries(); scheduleRender(0); });
   serie && (serie.onchange=()=>{ const sl = serie.value; if (sl && sl !== 'all'){ const e = eraFromSlug(sl); const eraEl = document.getElementById('era'); if (e && e.key && eraEl) eraEl.value = e.key; } refreshSeries(); scheduleRender(0); });
   view && (view.onchange=()=>scheduleRender(0));
+  layoutSel && (layoutSel.onchange=()=>scheduleRender(0));
   // enhance simple selects that are static
   enhanceSimpleSelect('view');
+  enhanceSimpleSelect('layout');
 
   const qs=document.getElementById('qs');
   const eraS=document.getElementById('eraS');
@@ -917,6 +979,8 @@ async function computeKPIsAsync(){
       root.innerHTML=`<div class='empty'>Aucun CSV cartes chargé (auto : <code>${AUTO_SOURCES.cards}</code>)</div>`;
     }else{
       let rows=CARDS.slice();
+      const layoutMode = layoutSel ? layoutSel.value : 'grid';
+      if (root) root.classList.toggle('list-mode', layoutMode === 'list');
       // Era filter first (cards)
       const eraSel=document.getElementById('era');
       const selectedEraKey = eraSel ? eraSel.value : 'all';
@@ -1002,8 +1066,53 @@ if (mode === 'noprice') {
         if (selectedSlug !== 'all' && selectedSlug === slug) {
           annotateRowsWithPrices(slug, arr);
         }
+        html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'><span class='s-title-text'>${escapeHtml(title)} <span class='hint'>(${arr.length} cartes)</span></span></h3>`;
 
-        html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'><span class='s-title-text'>${escapeHtml(title)} <span class='hint'>(${arr.length} cartes)</span></span></h3><div class='grid'>`;
+        if (layoutMode === 'list') {
+          html += `<div class='list-view'>`;
+          arr.forEach(r=>{
+            const rawUrl = r['Image URL'] || r['Image'] || '';
+            const safeUrl = sanitizeImageUrl(rawUrl);
+            const qte = ownedQty(r);
+            const prix = r['Prix'] ? String(r['Prix']) : null;
+            const gradedVal = Number(r['Gradées'] ?? 0);
+            const nbN = Number(r['Nb Normal']);
+            const nbR = Number(r['Nb Reverse']);
+            const nbS = Number(r['Nb Spéciale'] ?? r['Nb Speciale']);
+            const hasAlt = Number(r['Alternative']) === 1;
+            const variantTags = [];
+            if (nbN > 0) variantTags.push(`<span class="chip">Normale ×${nbN}</span>`);
+            else if (nbN === 0) variantTags.push(`<span class="chip muted">Normale manquante</span>`);
+            if (nbR > 0) variantTags.push(`<span class="chip">Reverse ×${nbR}</span>`);
+            else if (nbR === 0 && nbR !== -1) variantTags.push(`<span class="chip muted">Reverse manquante</span>`);
+            if (hasAlt){
+              if (nbS > 0) variantTags.push(`<span class="chip">Alternative ×${nbS}</span>`);
+              else variantTags.push(`<span class="chip muted">Alternative manquante</span>`);
+            }
+            if (gradedVal !== 0) variantTags.push(`<span class="chip chip-graded">Gradée</span>`);
+            const { label: rarityLabel } = rarityFromRow(r);
+            if (rarityLabel) variantTags.unshift(`<span class="chip">${rarityIconOnly(r)} ${escapeHtml(rarityLabel)}</span>`);
+            const tagsHtml = variantTags.length ? variantTags.join('') : `<span class="chip muted">Aucune variante</span>`;
+
+            html += `
+              <div class="list-row">
+                <div class="list-thumb">${safeUrl ? `<img loading="lazy" decoding="async" src="${escapeHtml(safeUrl)}" alt="${escapeHtml(r['Nom']||'')}"/>` : '<span class="hint">(pas d\'image)</span>'}</div>
+                <div class="list-info">
+                  <div class="name">${escapeHtml(r['Nom']||'Sans nom')}${gradedVal !== 0 ? `<span class="tag-graded">Gradée</span>` : ''}</div>
+                  <div class="num">${escapeHtml(r['Numéro']||'—')}</div>
+                  <div class="list-tags">${tagsHtml}</div>
+                </div>
+                <div class="list-meta">
+                  <span class="qty">Total ×${qte}</span>
+                  ${prix ? `<span class="price">Prix : ${escapeHtml(prix)}</span>` : ''}
+                </div>
+              </div>`;
+          });
+          html += `</div></div>`;
+          return;
+        }
+
+        html+=`<div class='grid'>`;
 arr.forEach(r=>{
   const rawUrl = r['Image URL'] || r['Image'] || '';
   const safeUrl = sanitizeImageUrl(rawUrl);
