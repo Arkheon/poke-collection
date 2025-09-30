@@ -41,18 +41,41 @@ function initApp(){
   let SERIE_CANON = new Map();
   let ERA_CANON = new Map(); // key -> label
 
-  /* ====================== ONGLET NAV ====================== */
-  const tabs = document.querySelectorAll('.tab');
-  tabs.forEach(t => t.addEventListener('click', () => {
-    tabs.forEach(x => x.classList.remove('active'));
-    t.classList.add('active');
-    const name = t.dataset.tab;
-    document.getElementById('panel-cards').style.display   = (name==='cards') ? 'block' : 'none';
-    document.getElementById('panel-sealed').style.display  = (name==='sealed')? 'block' : 'none';
-    document.getElementById('panel-graded').style.display  = (name==='graded')? 'block' : 'none';
-    document.getElementById('panel-stats').style.display   = (name==='stats') ? 'block' : 'none';
-    render();
-  }));
+  /* ====================== NAVIGATION PRINCIPALE ====================== */
+  const navTabs = document.querySelectorAll('[data-tab]');
+  const heroSection = document.getElementById('hero');
+  const sectionByTab = {
+    cards: document.getElementById('panel-cards'),
+    sealed: document.getElementById('panel-sealed'),
+    graded: document.getElementById('panel-graded'),
+    stats: document.getElementById('panel-stats'),
+  };
+
+  function activateTab(name){
+    navTabs.forEach(el => {
+      el.classList.toggle('active', el.dataset.tab === name);
+    });
+    if (heroSection) heroSection.style.display = (name === 'home') ? 'block' : 'none';
+    Object.entries(sectionByTab).forEach(([key, el]) => {
+      if (!el) return;
+      el.style.display = (name === key) ? 'block' : 'none';
+    });
+    if (name !== 'home') {
+      render();
+    }
+  }
+
+  navTabs.forEach(el => {
+    el.addEventListener('click', evt => {
+      evt.preventDefault();
+      const name = el.dataset.tab || 'home';
+      activateTab(name);
+      const target = name === 'home' ? heroSection : sectionByTab[name];
+      target && target.scrollIntoView({ behavior:'smooth', block:'start' });
+    });
+  });
+
+  activateTab('home');
 
   /* ====================== RARETÉS ====================== */
   const RARITY_MAP = {'1':'commune','2':'peu_commune','3':'rare','4':'rare','5':'rare_silver','6':'rare_silver','7':'promo','32':'double_rare','33':'illustration_rare','34':'ultra_rare_silver','35':'illustration_sr','36':'hyper_rare','39':'chromatique_ur','40':'high_tech'};

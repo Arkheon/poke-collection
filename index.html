@@ -34,11 +34,11 @@
         <span>Poké Collection</span>
       </a>
       <nav class="site-nav">
-        <a href="#panel-cards">Cartes</a>
-        <a href="#panel-sealed">Scellés</a>
-        <a href="#panel-graded">Gradées</a>
-        <a href="#panel-stats">Stats</a>
-        <a href="#contact">Contact</a>
+        <a class="nav-link" data-tab="home" href="#hero">Présentation</a>
+        <a class="nav-link" data-tab="cards" href="#panel-cards">Cartes</a>
+        <a class="nav-link" data-tab="sealed" href="#panel-sealed">Scellés</a>
+        <a class="nav-link" data-tab="graded" href="#panel-graded">Gradées</a>
+        <a class="nav-link" data-tab="stats" href="#panel-stats">Stats</a>
       </nav>
       <div class="site-actions">
         <a class="btn outline" href="./cartes.csv" download>Inventaire (.csv)</a>
@@ -47,7 +47,7 @@
     </div>
   </header>
 
-<section class="hero-2025">
+<section id="hero" class="hero-2025">
   <div class="hero-inner">
     <p class="hero-badge">Collection privée à vendre</p>
     <h1>Collection Pokémon exceptionnelle</h1>
@@ -106,23 +106,14 @@
       </article>
     </div>
 
-    <p class="hero-update-note" id="last-updated-banner" hidden>Dernière mise à jour : <span id="last-updated-text">—</span></p>
+    <p class="hero-update-note" id="last-updated-banner" hidden>Dernière mise à jour : <span id="last-updated-text">—</span></p>
   </div>
-</section>
-
-<section class="main-nav">
-  <nav class="tabs" role="tablist" aria-label="Sections">
-    <div class="tab active" data-tab="cards" role="tab" tabindex="0" aria-selected="true">Cartes</div>
-    <div class="tab" data-tab="sealed" role="tab" tabindex="0" aria-selected="false">Scellés</div>
-    <div class="tab" data-tab="graded" role="tab" tabindex="0" aria-selected="false">Gradées</div>
-    <div class="tab" data-tab="stats" role="tab" tabindex="0" aria-selected="false">Stats</div>
-  </nav>
 </section>
 
   <main>
 
     <!-- CARTES -->
-    <section class="panel" id="panel-cards">
+    <section class="panel" id="panel-cards" style="display:none">
       <div class="card">
         <h3>Filtres</h3>
         <div class="filters">

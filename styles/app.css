@@ -63,8 +63,25 @@ body{
 .brand span{letter-spacing:.02em}
 .logo{width:24px;height:24px;border-radius:8px;background:conic-gradient(from 20deg,#ff2d89,#22d3ee,#7c3aed,#ff2d89);box-shadow:0 0 24px rgba(124,58,237,.45)}
 .site-nav{display:flex;gap:22px;margin-left:auto;margin-right:auto;flex-wrap:wrap;justify-content:center}
-.site-nav a{color:rgba(226,232,240,.85);text-decoration:none;font-weight:600;font-size:14px;transition:color .2s ease}
-.site-nav a:hover{color:#ffffff}
+.site-nav .nav-link{
+  color:rgba(226,232,240,.75);
+  text-decoration:none;
+  font-weight:600;
+  font-size:14px;
+  position:relative;
+  padding:6px 0;
+  transition:color .2s ease;
+}
+.site-nav .nav-link::after{
+  content:""; position:absolute; left:0; right:0; bottom:-8px; height:2px;
+  background:linear-gradient(90deg,var(--accent),var(--primary));
+  transform:scaleX(0); transform-origin:center;
+  opacity:0; transition:opacity .2s ease, transform .2s ease;
+}
+.site-nav .nav-link:hover{color:#ffffff}
+.site-nav .nav-link:hover::after{opacity:.35; transform:scaleX(.6)}
+.site-nav .nav-link.active{color:#ffffff}
+.site-nav .nav-link.active::after{opacity:1; transform:scaleX(1)}
 .site-actions{display:flex;gap:12px;align-items:center}
 .btn{
   display:inline-flex;align-items:center;gap:8px;
@@ -117,12 +134,6 @@ body{
 .hero-feature p{margin:0;color:#cbd5f5;font-size:13px;line-height:1.5}
 .hero-update-note{margin:0;color:rgba(226,232,240,.8);font-size:12px;background:rgba(17,24,39,.7);border:1px solid rgba(148,163,184,.25);padding:10px 16px;border-radius:999px;display:inline-flex;gap:6px;align-items:center}
 .hero-update-note[hidden]{display:none}
-
-.main-nav{max-width:1150px;margin:16px auto 20px;padding:0 16px}
-.main-nav .tabs{margin:0;box-shadow:none;background:transparent;padding:0}
-.main-nav .tab{background:rgba(15,23,42,.72);border:1px solid rgba(148,163,184,.25)}
-.main-nav .tab:hover{box-shadow:0 6px 18px rgba(34,211,238,.12)}
-.main-nav .tab.active::before{opacity:.95}
 
 @media (max-width:720px){
   .hero-2025{padding:60px 16px 36px}
