@@ -21,103 +21,92 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script type="module" src="./src/main.js"></script>
 </head>
-<body class="theme-dark">
+<body id="top" class="theme-dark">
 
   <!-- Background FX -->
   <div class="bgfx" aria-hidden="true"></div>
 
   <!-- Header -->
-  <header>
+  <header class="site-header">
     <div class="wrap">
-      <div class="brand">
+      <a class="brand" href="#top">
         <i class="logo" aria-hidden="true"></i>
-        <h1>Poké Collection — Vitrine</h1>
-      </div>
-      <div class="bar">
-        <a class="btn ghost" href="#panel-cards">Catalogue</a>
-        <a class="btn primary" href="mailto:collection@arkheon.fr?subject=Offre%20achat%20collection%20Pok%C3%A9mon">Acheter l’intégralité</a>
+        <span>Poké Collection</span>
+      </a>
+      <nav class="site-nav">
+        <a href="#panel-cards">Cartes</a>
+        <a href="#panel-sealed">Scellés</a>
+        <a href="#panel-graded">Gradées</a>
+        <a href="#panel-stats">Stats</a>
+        <a href="#contact">Contact</a>
+      </nav>
+      <div class="site-actions">
+        <a class="btn outline" href="./cartes.csv" download>Inventaire (.csv)</a>
+        <a class="btn primary" href="#contact">Demander une offre</a>
       </div>
     </div>
   </header>
 
 <section class="hero-2025">
   <div class="hero-inner">
-    <div class="hero-head">
-      <h2>Collection Pokémon complète — <span class="txt-gradient">showcase 2025</span></h2>
-      <p class="lede">Vente en un seul lot : cartes, items scellés et cartes gradées. Estimations de prix (avg7/avg30) et indicateurs de complétion par série pour une vision claire de la collection.</p>
+    <p class="hero-badge">Collection privée à vendre</p>
+    <h1>Collection Pokémon exceptionnelle</h1>
+    <p class="hero-lede">Un lot unique prêt à être transmis : cartes à l’unité, items scellés et cartes gradées regroupés dans un inventaire entièrement documenté.</p>
 
-      <div class="hero-actions">
-        <a class="btn primary hero-cta" href="#contact">Demander une offre</a>
-        <a class="btn outline" href="./cartes.csv" download>Télécharger l’inventaire (.csv)</a>
-      </div>
+    <div class="hero-actions">
+      <a class="btn primary hero-cta" href="#contact">Demander une offre</a>
+      <a class="btn outline" href="./cartes.csv" download>Voir l’inventaire (.csv)</a>
     </div>
 
-    <div class="hero-body">
-      <div class="hero-column hero-column--info">
-        <div class="hero-highlight-list">
-          <div class="hero-mini">
-            <span class="hero-mini-ico">🧾</span>
-            <div>
-              <div class="hero-mini-title">Inventaire structuré</div>
-              <p>Données normalisées, photos HD et raretés identifiées pour chaque carte.</p>
-            </div>
-          </div>
-          <div class="hero-mini">
-            <span class="hero-mini-ico">🔒</span>
-            <div>
-              <div class="hero-mini-title">Transaction sécurisée</div>
-              <p>Remise en main propre ou expédition suivie et assurée.</p>
-            </div>
-          </div>
-          <div class="hero-mini">
-            <span class="hero-mini-ico">⚡️</span>
-            <div>
-              <div class="hero-mini-title">Support réactif</div>
-              <p>Visio de présentation possible, réponse garantie sous 24&nbsp;h.</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="hero-mini hero-mini--update" id="last-updated-banner" hidden>
-          <span class="hero-mini-title">Dernière mise à jour</span>
-          <span class="hero-mini-sub hero-mini-sub--value" id="last-updated-text">—</span>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <span class="hero-stat-icon">📊</span>
+        <div>
+          <span class="hero-stat-value" id="kpi-cards-count">—</span>
+          <span class="hero-stat-label">Cartes cataloguées</span>
         </div>
       </div>
-
-      <div class="hero-column hero-column--metrics">
-        <div class="hero-highlight-list hero-highlight-list--metrics">
-          <div class="hero-mini hero-mini--metric">
-            <span class="hero-mini-ico">🪙</span>
-            <div>
-              <div class="hero-mini-title">Valeur estimée</div>
-              <div class="hero-mini-value" id="kpi-total-value">—</div>
-            </div>
-          </div>
-          <div class="hero-mini hero-mini--metric">
-            <span class="hero-mini-ico">📊</span>
-            <div>
-              <div class="hero-mini-title">Cartes suivies</div>
-              <div class="hero-mini-value" id="kpi-cards-count">— <span class="hero-mini-sub">(<span id="kpi-cards-priced">—</span>/<span id="kpi-cards-total">—</span> prix)</span></div>
-            </div>
-          </div>
-          <div class="hero-mini hero-mini--metric">
-            <span class="hero-mini-ico">📦</span>
-            <div>
-              <div class="hero-mini-title">Items scellés</div>
-              <div class="hero-mini-value" id="kpi-sealed-count">— <span class="hero-mini-sub">(<span id="kpi-sealed-value">—</span>)</span></div>
-            </div>
-          </div>
-          <div class="hero-mini hero-mini--metric">
-            <span class="hero-mini-ico">🛡️</span>
-            <div>
-              <div class="hero-mini-title">Cartes gradées</div>
-              <div class="hero-mini-value" id="kpi-graded-count">— <span class="hero-mini-sub">(<span id="kpi-graded-value">—</span>)</span></div>
-            </div>
-          </div>
+      <div class="hero-stat">
+        <span class="hero-stat-icon">📦</span>
+        <div>
+          <span class="hero-stat-value" id="kpi-sealed-count">—</span>
+          <span class="hero-stat-label">Items scellés</span>
+        </div>
+      </div>
+      <div class="hero-stat">
+        <span class="hero-stat-icon">🛡️</span>
+        <div>
+          <span class="hero-stat-value" id="kpi-graded-count">—</span>
+          <span class="hero-stat-label">Cartes gradées</span>
         </div>
       </div>
     </div>
 
+    <div class="hero-features">
+      <article class="hero-feature">
+        <span class="hero-feature-icon">🧾</span>
+        <div>
+          <h3>Inventaire structuré</h3>
+          <p>Plusieurs centaines de fiches détaillées avec photos HD, raretés, numéros et suivi des variantes.</p>
+        </div>
+      </article>
+      <article class="hero-feature">
+        <span class="hero-feature-icon">🔒</span>
+        <div>
+          <h3>Transaction maîtrisée</h3>
+          <p>Remise en main propre ou expédition suivie et assurée, avec dossier de preuves complet.</p>
+        </div>
+      </article>
+      <article class="hero-feature">
+        <span class="hero-feature-icon">⚡️</span>
+        <div>
+          <h3>Support réactif</h3>
+          <p>Visio de présentation possible, réponses rapides et partage des sources de prix sur demande.</p>
+        </div>
+      </article>
+    </div>
+
+    <p class="hero-update-note" id="last-updated-banner" hidden>Dernière mise à jour : <span id="last-updated-text">—</span></p>
   </div>
 </section>
 

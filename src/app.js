@@ -940,24 +940,16 @@ async function computeKPIsAsync(){
     if (elTotal) elTotal.textContent = nf_eur.format(k.totalValue);
 
     // Cartes
-    const elCardsCount  = document.getElementById('kpi-cards-count');
-    const elCardsPriced = document.getElementById('kpi-cards-priced');
-    const elCardsTotal  = document.getElementById('kpi-cards-total');
-    elCardsCount  && (elCardsCount.textContent  = nf_int.format(k.cCards));
-    elCardsPriced && (elCardsPriced.textContent = nf_int.format(k.cardsPricedQty));
-    elCardsTotal  && (elCardsTotal.textContent  = nf_int.format(k.cardsTotalQty));
+    const elCardsCount = document.getElementById('kpi-cards-count');
+    elCardsCount && (elCardsCount.textContent = nf_int.format(k.cCards));
 
     // Scellés
     const elSealedCount = document.getElementById('kpi-sealed-count');
-    const elSealedValue = document.getElementById('kpi-sealed-value');
     elSealedCount && (elSealedCount.textContent = nf_int.format(k.cSealed));
-    elSealedValue && (elSealedValue.textContent = nf_eur.format(k.vSealed || 0));
 
     // Gradées
     const elGradedCount = document.getElementById('kpi-graded-count');
-    const elGradedValue = document.getElementById('kpi-graded-value');
     elGradedCount && (elGradedCount.textContent = nf_int.format(k.cGraded));
-    elGradedValue && (elGradedValue.textContent = nf_eur.format(k.vGraded || 0));
   }
 
   /* ====================== RENDER ====================== */
