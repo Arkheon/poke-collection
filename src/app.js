@@ -765,7 +765,8 @@ const pRev  = e => Number(e?.reverseTrend ?? 0) || pNorm(e);
   modal && modal.addEventListener('click', (e)=>{ if(e.target===modal) closeModal(); });
   document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeModal(); });
   document.body.addEventListener('click', (e)=>{
-    const img = e.target.closest?.('.thumb img, .g-thumb img'); if (img) openModal(img.src, img.alt);
+    const img = e.target.closest?.('.thumb img, .g-thumb img, .list-thumb img');
+    if (img) openModal(img.src, img.alt);
   });
 
   /* ====================== KPI HELPERS ====================== */
@@ -977,13 +978,14 @@ async function computeKPIsAsync(){
 
   /* ====================== RENDER ====================== */
   function render(){
+    const layoutMode = layoutSel ? layoutSel.value : 'grid';
+    const qtyFieldCandidates = ['Qty','Quantité','quantite','quantity','Owned','Nb','Qte','Count'];
     // CARTES
     const root=document.getElementById('cards-root');
     if(!(CARDS&&CARDS.length)){
       root.innerHTML=`<div class='empty'>Aucun CSV cartes chargé (auto : <code>${AUTO_SOURCES.cards}</code>)</div>`;
     }else{
       let rows=CARDS.slice();
-      const layoutMode = layoutSel ? layoutSel.value : 'grid';
       if (root) root.classList.toggle('list-mode', layoutMode === 'list');
       // Era filter first (cards)
       const eraSel=document.getElementById('era');
@@ -1157,8 +1159,12 @@ const gradedBadge = (gradedVal !== 0)
     // SCELLÉS
     const rootS = document.getElementById('sealed-root');
     if (!(SEALED && SEALED.length)) {
-      rootS.innerHTML = `<div class='empty'>Aucun CSV scellé chargé (auto : <code>${AUTO_SOURCES.sealed}</code>)</div>`;
+      if (rootS) {
+        rootS.classList.toggle('list-mode', layoutMode === 'list');
+        rootS.innerHTML = `<div class='empty'>Aucun CSV scellé chargé (auto : <code>${AUTO_SOURCES.sealed}</code>)</div>`;
+      }
     } else {
+      rootS.classList.toggle('list-mode', layoutMode === 'list');
       let rows = SEALED.slice();
 
       const eraSelS = document.getElementById('eraS');
@@ -1205,37 +1211,77 @@ const gradedBadge = (gradedVal !== 0)
           <div class="section">
             <h3 style="margin:0 4px 12px 4px;font-size:16px;">
               <span class="s-title-text">${escapeHtml(title)} <span class="hint">(${arr.length})</span></span>
-            </h3>
-            <div class="grid sealed-grid">`;
-arr.forEach(r => {
-  const rawUrl = r['Image'] || '';
-  const safeUrl = sanitizeImageUrl(rawUrl);
-  const type = r['Type'] || 'Item';
-  const detail = r['Détail'] || '';
-  const com = r['Commentaires'] || '';
+            </h3>`;
 
-  // ➕ NEW: lecture du prix depuis le CSV, formatage €
-  const priceVal  = parseEuro(r['Prix'] ?? r['Price'] ?? r['Valeur'] ?? r['Estimation'] ?? r['value']);
-  const priceChip = (priceVal > 0) ? `<span class="chip chip-price">${nf_eur.format(priceVal)}</span>` : '';
+        if (layoutMode === 'list') {
+          html += `<div class="list-view sealed-list">`;
+          arr.forEach(r => {
+            const rawUrl = r['Image'] || r['Image URL'] || '';
+            const safeUrl = sanitizeImageUrl(rawUrl);
+            const type = r['Type'] || 'Item';
+            const detail = r['Détail'] || '';
+            const comments = r['Commentaires'] || '';
+            const titleLabel = detail || type || 'Item scellé';
+            const subtitle = detail && type && detail !== type ? type : '';
+            const priceVal = parseEuro(r['Prix'] ?? r['Price'] ?? r['Valeur'] ?? r['Estimation'] ?? r['value']);
+            const priceText = priceVal > 0 ? nf_eur.format(priceVal) : (r['Prix'] ? String(r['Prix']) : null);
+            const hasQtyField = qtyFieldCandidates.some(k => r[k] != null && String(r[k]).trim() !== '');
+            const qtyDisplay = hasQtyField ? getQty(r) : null;
+            const tags = [
+              `<span class="chip"><span class="chip-ico">${sealedIcon(type)}</span>${escapeHtml(type)}</span>`
+            ];
+            if (comments) tags.push(`<span class="chip muted">${escapeHtml(comments)}</span>`);
+            const tagsHtml = tags.join('');
+            const thumb = safeUrl
+              ? `<img loading="lazy" decoding="async" src="${escapeHtml(safeUrl)}" alt="${escapeHtml(titleLabel)}"/>`
+              : `<span class="noimg hint">(pas d'image)</span>`;
 
-  html += `
-    <div class="sealed-card">
-      <div class="sealed-thumb">
-        ${safeUrl ? `<img loading="lazy" decoding="async" src="${escapeHtml(safeUrl)}" alt="${escapeHtml(type)}"/>`
-              : `<span class="noimg hint">(pas d'image)</span>`}
-      </div>
-      <div class="sealed-meta">
-        ${detail ? `<div class="sealed-sub top">${escapeHtml(detail)}</div>` : ''}
-        <div class="sealed-chips single">
-          <span class="chip"><span class="chip-ico">${sealedIcon(type)}</span>${escapeHtml(type)}</span>
-          ${priceChip}                             <!-- ➕ NEW: chip prix -->
-          ${com ? `<span class="chip muted">${escapeHtml(com)}</span>` : ''}
-        </div>
-      </div>
-    </div>`;
-});
+            html += `
+              <div class="list-row sealed-row">
+                <div class="list-thumb">${thumb}</div>
+                <div class="list-info">
+                  <div class="name">${escapeHtml(titleLabel)}</div>
+                  ${subtitle ? `<div class="num">${escapeHtml(subtitle)}</div>` : ''}
+                  <div class="list-tags">${tagsHtml}</div>
+                </div>
+                <div class="list-meta">
+                  ${qtyDisplay != null ? `<div class="qty">Qté : ${qtyDisplay}</div>` : ''}
+                  ${priceText ? `<div class="price">${escapeHtml(priceText)}</div>` : ''}
+                </div>
+              </div>`;
+          });
+          html += `</div>`;
+        } else {
+          html += `<div class="grid sealed-grid">`;
+          arr.forEach(r => {
+            const rawUrl = r['Image'] || '';
+            const safeUrl = sanitizeImageUrl(rawUrl);
+            const type = r['Type'] || 'Item';
+            const detail = r['Détail'] || '';
+            const com = r['Commentaires'] || '';
+            const priceVal  = parseEuro(r['Prix'] ?? r['Price'] ?? r['Valeur'] ?? r['Estimation'] ?? r['value']);
+            const priceChip = (priceVal > 0) ? `<span class="chip chip-price">${nf_eur.format(priceVal)}</span>` : '';
 
-        html += `</div></div>`;
+            html += `
+              <div class="sealed-card">
+                <div class="sealed-thumb">
+                  ${safeUrl ? `<img loading="lazy" decoding="async" src="${escapeHtml(safeUrl)}" alt="${escapeHtml(type)}"/>`
+                        : `<span class="noimg hint">(pas d'image)</span>`}
+                </div>
+                <div class="sealed-meta">
+                  ${detail ? `<div class="sealed-sub top">${escapeHtml(detail)}</div>` : ''}
+                  <div class="sealed-chips single">
+                    <span class="chip"><span class="chip-ico">${sealedIcon(type)}</span>${escapeHtml(type)}</span>
+                    ${priceChip}
+                    ${com ? `<span class="chip muted">${escapeHtml(com)}</span>` : ''}
+                  </div>
+                </div>
+              </div>`;
+          });
+          html += `</div>`;
+        }
+
+        html += `</div>`;
       });
       rootS.innerHTML = html || `<div class='empty'>Aucun résultat.</div>`;
     }
@@ -1243,8 +1289,12 @@ arr.forEach(r => {
     // GRADÉES
     const rootG = document.getElementById('graded-root');
     if (!(GRADED && GRADED.length)) {
-      rootG.innerHTML = `<div class='empty'>Aucun CSV gradées chargé (auto : <code>${AUTO_SOURCES.graded}</code>)</div>`;
+      if (rootG) {
+        rootG.classList.toggle('list-mode', layoutMode === 'list');
+        rootG.innerHTML = `<div class='empty'>Aucun CSV gradées chargé (auto : <code>${AUTO_SOURCES.graded}</code>)</div>`;
+      }
     } else {
+      rootG.classList.toggle('list-mode', layoutMode === 'list');
       let rows = GRADED.slice();
 
       if (document.getElementById('company')?.value !== 'all') {
@@ -1260,67 +1310,107 @@ arr.forEach(r => {
 
       rows.sort((a,b)=> String(a['Nom']||'').localeCompare(String(b['Nom']||''), 'fr'));
 
-        const companyIcon = (name='')=>{
-          const n = String(name).toUpperCase();
-          if (n.includes('PSA')) {
-            return `<svg viewBox="0 0 24 12" width="24" height="12" class="psa" aria-hidden="true">
-                      <rect x="0" y="0" width="10" height="12" rx="2"/>
-                      <rect x="14" y="0" width="10" height="12" rx="2"/>
-                    </svg>`;
-          }
-          if (n.includes('PCA')) {
-            return `<svg viewBox="0 0 24 24" width="16" height="16" class="pca" aria-hidden="true">
-                      <polygon points="12,2 15,9 23,9 17,14 19,22 12,17 5,22 7,14 1,9 9,9"/>
-                    </svg>`;
-          }
-          if (n.includes('BGS')) {
-            return `<svg viewBox="0 0 24 24" width="16" height="16" class="bgs" aria-hidden="true">
-                      <path d="M12 2l8 5v10l-8 5-8-5V7l8-5z"/>
-                    </svg>`;
-          }
-          if (n.includes('CGC')) {
-            return `<svg viewBox="0 0 24 24" width="16" height="16" class="cgc" aria-hidden="true">
-                      <polygon points="12,2 22,7 22,17 12,22 2,17 2,7"/>
-                    </svg>`;
-          }
-          // fallback
-          return `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                    <circle cx="12" cy="12" r="8"/>
+      const companyIcon = (name='')=>{
+        const n = String(name).toUpperCase();
+        if (n.includes('PSA')) {
+          return `<svg viewBox="0 0 24 12" width="24" height="12" class="psa" aria-hidden="true">
+                    <rect x="0" y="0" width="10" height="12" rx="2"/>
+                    <rect x="14" y="0" width="10" height="12" rx="2"/>
                   </svg>`;
-        };
+        }
+        if (n.includes('PCA')) {
+          return `<svg viewBox="0 0 24 24" width="16" height="16" class="pca" aria-hidden="true">
+                    <polygon points="12,2 15,9 23,9 17,14 19,22 12,17 5,22 7,14 1,9 9,9"/>
+                  </svg>`;
+        }
+        if (n.includes('BGS')) {
+          return `<svg viewBox="0 0 24 24" width="16" height="16" class="bgs" aria-hidden="true">
+                    <path d="M12 2l8 5v10l-8 5-8-5V7l8-5z"/>
+                  </svg>`;
+        }
+        if (n.includes('CGC')) {
+          return `<svg viewBox="0 0 24 24" width="16" height="16" class="cgc" aria-hidden="true">
+                    <polygon points="12,2 22,7 22,17 12,22 2,17 2,7"/>
+                  </svg>`;
+        }
+        return `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <circle cx="12" cy="12" r="8"/>
+                </svg>`;
+      };
 
+      let html = '';
+      if (layoutMode === 'list') {
+        html += `<div class="list-view graded-list">`;
+        rows.forEach(r => {
+          const rawImg = r['Image'] || '';
+          const safeImg = sanitizeImageUrl(rawImg);
+          const thumb = safeImg
+            ? `<img loading="lazy" decoding="async" src="${escapeHtml(safeImg)}" alt="${escapeHtml(r['Nom']||'Carte gradée')}">`
+            : `<span class="hint">(pas d'image)</span>`;
+          const nom = r['Nom'] || 'Carte gradée';
+          const comp = r['Société'] || '?';
+          const note = r['Note'] ? String(r['Note']) : '';
+          const sub  = [r['Edition']||'', r['Détail']||''].filter(Boolean).join(' • ');
+          const comments = r['Commentaires'] || '';
+          const priceVal = parseEuro(
+            r['Prix'] ?? r['Price'] ?? r['Valeur'] ?? r['Estimation'] ?? r['value']
+          );
+          const priceText = priceVal > 0 ? nf_eur.format(priceVal) : (r['Prix'] ? String(r['Prix']) : null);
+          const hasQtyField = qtyFieldCandidates.some(k => r[k] != null && String(r[k]).trim() !== '');
+          const qtyDisplay = hasQtyField ? getQty(r) : null;
+          const tags = [`<span class="chip">${companyIcon(comp)} <b>${escapeHtml(comp)}</b></span>`];
+          if (comments) tags.push(`<span class="chip muted">${escapeHtml(comments)}</span>`);
+          const tagsHtml = tags.join('');
 
-      let html = `<div class="grid">`;
-      rows.forEach(r=>{
-        const rawImg = r['Image'] || '';
-        const safeImg = sanitizeImageUrl(rawImg);
-        const img = safeImg ? `<img loading="lazy" decoding="async" src="${escapeHtml(safeImg)}" alt="${escapeHtml(r['Nom']||'Carte gradée')}">` : '';
-        const nom = r['Nom'] || 'Carte gradée';
-        const comp = r['Société'] || '?';
-        const note = r['Note'] ? String(r['Note']) : null;
-        const sub  = [r['Edition']||'', r['Détail']||''].filter(Boolean).join(' • ');
-          // --- NEW: prix unitaire depuis le CSV gradées (colonne "Prix")
-        const priceVal = parseEuro(
-          r['Prix'] ?? r['Price'] ?? r['Valeur'] ?? r['Estimation'] ?? r['value']
-        );
-        const priceChip = (priceVal > 0)
-          ? `<span class="chip chip-price">${nf_eur.format(priceVal)}</span>`
-          : '';
-
-        html += `
-          <div class="g-item">
-            <div class="g-thumb">${img || '<span class="hint">(pas d\'image)</span>'}</div>
-            <div class="g-meta">
-              <div class="g-title">${escapeHtml(nom)}</div>
-              ${sub ? `<div class="g-sub">${escapeHtml(sub)}</div>` : ''}
-              <div class="g-foot">
-                <span class="chip">${companyIcon(comp)} <b>${comp}</b>${note ? ` • <em>${note}</em>`:''}</span>
-                ${priceChip}
+          html += `
+            <div class="list-row graded-row">
+              <div class="list-thumb g-thumb">${thumb}</div>
+              <div class="list-info">
+                <div class="name">${escapeHtml(nom)}</div>
+                ${sub ? `<div class="num">${escapeHtml(sub)}</div>` : ''}
+                <div class="list-tags">${tagsHtml}</div>
               </div>
-            </div>
-          </div>`;
-      });
-      html += `</div>`;
+              <div class="list-meta">
+                ${note ? `<div class="grade">Note : ${escapeHtml(note)}</div>` : ''}
+                ${qtyDisplay != null ? `<div class="qty">Qté : ${qtyDisplay}</div>` : ''}
+                ${priceText ? `<div class="price">${escapeHtml(priceText)}</div>` : ''}
+              </div>
+            </div>`;
+        });
+        html += `</div>`;
+      } else {
+        html += `<div class="grid">`;
+        rows.forEach(r=>{
+          const rawImg = r['Image'] || '';
+          const safeImg = sanitizeImageUrl(rawImg);
+          const img = safeImg ? `<img loading="lazy" decoding="async" src="${escapeHtml(safeImg)}" alt="${escapeHtml(r['Nom']||'Carte gradée')}">` : '';
+          const nom = r['Nom'] || 'Carte gradée';
+          const comp = r['Société'] || '?';
+          const note = r['Note'] ? String(r['Note']) : null;
+          const sub  = [r['Edition']||'', r['Détail']||''].filter(Boolean).join(' • ');
+          const priceVal = parseEuro(
+            r['Prix'] ?? r['Price'] ?? r['Valeur'] ?? r['Estimation'] ?? r['value']
+          );
+          const priceChip = (priceVal > 0)
+            ? `<span class="chip chip-price">${nf_eur.format(priceVal)}</span>`
+            : '';
+
+          html += `
+            <div class="g-item">
+              <div class="g-thumb">${img || '<span class="hint">(pas d\'image)</span>'}</div>
+              <div class="g-meta">
+                <div class="g-title">${escapeHtml(nom)}</div>
+                ${sub ? `<div class="g-sub">${escapeHtml(sub)}</div>` : ''}
+                <div class="g-foot">
+                  <span class="chip">${companyIcon(comp)} <b>${comp}</b>${note ? ` • <em>${note}</em>`:''}</span>
+                  ${priceChip}
+                </div>
+              </div>
+            </div>`;
+        });
+        html += `</div>`;
+      }
+
       rootG.innerHTML = html || `<div class='empty'>Aucun résultat.</div>`;
     }
 
