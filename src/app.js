@@ -9,6 +9,62 @@ import { mountStatsView } from './ui/statsView.js';
 import { enhanceSeriesSelect } from './ui/iconSelect.js';
 import { enhanceSimpleSelect } from './ui/simpleSelect.js';
 
+const THEME_STORAGE_KEY = 'pc-theme';
+let currentTheme = 'dark';
+
+function getStoredTheme(){
+  try {
+    const value = localStorage.getItem(THEME_STORAGE_KEY);
+    if (value === 'light' || value === 'dark') return value;
+  } catch {}
+  return null;
+}
+
+function getPreferredTheme(){
+  if (typeof window === 'undefined') return 'dark';
+  const stored = getStoredTheme();
+  if (stored) return stored;
+  const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  return prefersLight ? 'light' : 'dark';
+}
+
+function applyTheme(theme, { persist = true } = {}){
+  const target = theme === 'light' ? 'light' : 'dark';
+  currentTheme = target;
+  const body = document.body;
+  if (body){
+    body.classList.remove('theme-dark','theme-light');
+    body.classList.add(target === 'light' ? 'theme-light' : 'theme-dark');
+  }
+  document.documentElement.setAttribute('data-theme', target);
+  const toggle = document.getElementById('themeToggle');
+  if (toggle){
+    toggle.setAttribute('aria-label', target === 'light' ? 'Activer le thème sombre' : 'Activer le thème clair');
+    toggle.dataset.theme = target;
+  }
+  if (persist){
+    try { localStorage.setItem(THEME_STORAGE_KEY, target); } catch {}
+  }
+}
+
+function setupThemeToggle(){
+  const btn = document.getElementById('themeToggle');
+  if (!btn) return;
+  btn.addEventListener('click', ()=>{
+    const next = currentTheme === 'light' ? 'dark' : 'light';
+    applyTheme(next);
+  });
+}
+
+if (typeof document !== 'undefined'){
+  currentTheme = getPreferredTheme();
+  if (document.body){
+    applyTheme(currentTheme, { persist:false });
+  } else {
+    document.addEventListener('DOMContentLoaded', () => applyTheme(currentTheme, { persist:false }), { once:true });
+  }
+}
+
 /* ====================== RENDER SCHEDULER ====================== */
 let _rerenderTimer = null;
 let _renderRef = null; // alimenté par initApp()
@@ -28,6 +84,8 @@ export function boot() {
 function initApp(){
   loadFrMap(); // map FR -> setId
   loadSetsMeta(); // sets meta (series/era + icons), no-op if missing
+  applyTheme(currentTheme, { persist:false });
+  setupThemeToggle();
 
   // Une seule et unique définition : pas de redéclaration possible.
   const params = new URLSearchParams(location.search);
@@ -147,10 +205,24 @@ function initApp(){
 
   /* ====================== DONNÉES ====================== */
   let CARDS=[], SEALED=[], GRADED=[];
+  const CARDS_BY_SLUG = new Map();
   const AUTO_SOURCES={ cards:'cartes.csv', sealed:'scelle.csv', graded:'gradees.csv' };
   const LAST_UPDATED={ cards:null, sealed:null, graded:null };
   const LAST_UPDATED_SOURCE={ cards:null, sealed:null, graded:null };
   const nf_datetime = new Intl.DateTimeFormat('fr-FR',{ dateStyle:'long', timeStyle:'short' });
+
+  function rebuildCardsIndex(){
+    CARDS_BY_SLUG.clear();
+    if (!Array.isArray(CARDS)) return;
+    for (const row of CARDS){
+      const slug = slugify(row['Série'] || '');
+      if (!slug) continue;
+      row.__slug = slug;
+      const bucket = CARDS_BY_SLUG.get(slug);
+      if (bucket) bucket.push(row);
+      else CARDS_BY_SLUG.set(slug, [row]);
+    }
+  }
 
   function parseHttpDate(value){
     if (!value) return null;
@@ -224,7 +296,7 @@ function initApp(){
     rows.map(r=>Object.fromEntries(Object.entries(r).map(([k,v])=>[String(k).trim(), typeof v==='string'? v.trim(): v])));
 
   // Chargements auto (+ mise à jour KPI)
-  loadCsvFromUrl('cards', AUTO_SOURCES.cards, rows=>{ CARDS=normalizeRows(rows); refreshSeries();PriceBook.bySet.clear();PriceBook.ready = false; render(); updateKPIs(); });
+  loadCsvFromUrl('cards', AUTO_SOURCES.cards, rows=>{ CARDS=normalizeRows(rows); rebuildCardsIndex(); refreshSeries();PriceBook.bySet.clear(); PriceBook.bundle=null; PriceBook.ready = false; PriceBook.loading=null; render(); updateKPIs(); });
   loadCsvFromUrl('sealed', AUTO_SOURCES.sealed, rows=>{ SEALED=normalizeRows(rows); refreshSeries();  refreshSealedFilters(); render(); updateKPIs(); });
   loadCsvFromUrl('graded', AUTO_SOURCES.graded, rows=>{ GRADED=normalizeRows(rows); refreshCompanies();  render(); updateKPIs(); });
 
@@ -233,7 +305,7 @@ function initApp(){
     document.getElementById('csv-cards')?.addEventListener('change', e=>{
       const f=e.target.files?.[0]; if(!f) return;
       Papa.parse(f,{header:true,skipEmptyLines:true,complete:res=>{
-        CARDS=normalizeRows(res.data); refreshSeries(); render(); updateKPIs();
+        CARDS=normalizeRows(res.data); rebuildCardsIndex(); PriceBook.bySet.clear(); PriceBook.bundle=null; PriceBook.ready = false; PriceBook.loading=null; refreshSeries(); render(); updateKPIs();
         registerLastUpdated('cards', f.lastModified ? new Date(f.lastModified) : new Date(), 'upload');
       }});
     });
@@ -259,6 +331,7 @@ function initApp(){
       ];
       SEALED=[{'Série':'151','Type':'ETB','Détail':'Exemple','Commentaires':'—','Image':'https://via.placeholder.com/400x250?text=ETB+151','Prix':'89,00'}];
       GRADED=[{'Nom':'Pikachu','Edition':'SWSH','Société':'PSA','Note':'10','Détail':'Test','Image':'https://via.placeholder.com/400x250?text=PSA+10','Prix':'120'}];
+      rebuildCardsIndex(); PriceBook.bySet.clear(); PriceBook.bundle=null; PriceBook.ready = false; PriceBook.loading=null;
       refreshSeries(); refreshSealedFilters(); refreshCompanies(); render(); updateKPIs();
       const now = new Date();
       registerLastUpdated('cards', now, 'demo');
@@ -338,7 +411,7 @@ function initApp(){
   const unwrap = (x)=> (x && x.items) ? x.items : x;
 
   // PriceBook: on charge chaque set (main + GG/TG/SV) une seule fois
-  const PriceBook = { bySet:new Map(), bundle:null, ready:false };
+  const PriceBook = { bySet:new Map(), bundle:null, ready:false, loading:null };
 
   async function ensurePriceBook(){
     if (PriceBook.ready) return;
@@ -362,10 +435,10 @@ function initApp(){
         PriceBook.bundle = null;
         await loadFrMap();
 
-        const slugs = Array.from(new Set(CARDS.map(r => slugify(r['Série'] || '')).filter(Boolean)));
+        const slugs = Array.from(CARDS_BY_SLUG.keys());
         const setIds = new Set();
         for (const sl of slugs){
-          const rowsForSlug = CARDS.filter(r => slugify(r['Série'] || '') === sl);
+          const rowsForSlug = CARDS_BY_SLUG.get(sl) || [];
           const hasGG = rowsForSlug.some(r => /^GG\d+/i.test(String(r['Numéro']||'').trim()));
           const hasTG = rowsForSlug.some(r => /^TG\d+/i.test(String(r['Numéro']||'').trim()));
           const hasSV = rowsForSlug.some(r => /^(SV\d+|SV\d+\/\d+)/i.test(String(r['Numéro']||'').trim()));
@@ -394,7 +467,7 @@ function initApp(){
   }
 
   function lookupEntryForRow(row){
-    const slug   = slugify(row['Série'] || '');
+    const slug   = row.__slug || slugify(row['Série'] || '');
     const numRaw = String(row['Numéro'] || '').trim().toUpperCase();
     if (!slug || !numRaw) return null;
 
@@ -544,7 +617,7 @@ const pRev  = e => Number(e?.reverseTrend ?? 0) || pNorm(e);
   function computeStatsPerSeries(){
     const map = new Map();
     CARDS.forEach(r=>{
-      const slug = slugify(r['Série']); if(!slug) return;
+      const slug = r.__slug || slugify(r['Série']); if(!slug) return;
 
       const nbN = Number(r['Nb Normal']);
       const nbR = Number(r['Nb Reverse']);
@@ -1078,18 +1151,19 @@ async function computeKPIsAsync(){
     if(!(CARDS&&CARDS.length)){
       root.innerHTML=`<div class='empty'>Aucun CSV cartes chargé (auto : <code>${AUTO_SOURCES.cards}</code>)</div>`;
     }else{
-      let rows=CARDS.slice();
-      if (root) root.classList.toggle('list-mode', layoutMode === 'list');
-      // Era filter first (cards)
-      const eraSel=document.getElementById('era');
-      const selectedEraKey = eraSel ? eraSel.value : 'all';
-      if (selectedEraKey !== 'all') {
-        rows = rows.filter(r => (eraFromSlug(slugify(r['Série'])||'')?.key || '') === selectedEraKey);
-      }
       const serieSel=document.getElementById('serie');
       const selectedSlug = serieSel ? serieSel.value : 'all';
-      if(selectedSlug !== 'all'){
-        rows = rows.filter(r => slugify(r['Série']) === selectedSlug);
+      const eraSel=document.getElementById('era');
+      const selectedEraKey = eraSel ? eraSel.value : 'all';
+
+      let rows = selectedSlug !== 'all'
+        ? Array.from(CARDS_BY_SLUG.get(selectedSlug) || [])
+        : Array.from(CARDS);
+
+      if (root) root.classList.toggle('list-mode', layoutMode === 'list');
+
+      if (selectedEraKey !== 'all') {
+        rows = rows.filter(r => (eraFromSlug(r.__slug || slugify(r['Série']||''))?.key || '') === selectedEraKey);
       }
       if(q && q.value.trim()){
         const qq=q.value.toLowerCase();
@@ -1141,7 +1215,7 @@ if (mode === 'noprice') {
       // Groupes par série
       const groupsMap = new Map();
       rows.forEach(r=>{
-        const sl = slugify(r['Série']);
+        const sl = r.__slug || slugify(r['Série']);
         if(!groupsMap.has(sl)) groupsMap.set(sl, []);
         groupsMap.get(sl).push(r);
       });
