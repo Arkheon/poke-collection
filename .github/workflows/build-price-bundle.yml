@@ -1,0 +1,27 @@
+name: Build price bundle preview
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build aggregated price bundle
+        run: node scripts/build-price-bundle.js
+
+      - name: Commit bundle preview
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: add price bundle preview"
+          file_pattern: |
+            public/prices/cards-bundle.json
