@@ -4,7 +4,7 @@ import { parseNumDen, parseSubset } from './domain/numbers.js';
 import { eur, choosePrice } from './domain/pricing.js';
 import { loadFrMap, getSetIdFromSlug } from './services/frMap.js';
 import { loadSetsMeta, eraFromSlug } from './services/setsMeta.js';
-import { getSetPrices } from './services/priceService.js';
+import { getSetPrices, getPriceBundle } from './services/priceService.js';
 import { mountStatsView } from './ui/statsView.js';
 import { enhanceSeriesSelect } from './ui/iconSelect.js';
 import { enhanceSimpleSelect } from './ui/simpleSelect.js';
@@ -338,43 +338,81 @@ function initApp(){
   const unwrap = (x)=> (x && x.items) ? x.items : x;
 
   // PriceBook: on charge chaque set (main + GG/TG/SV) une seule fois
-  const PriceBook = { bySet:new Map(), ready:false };
+  const PriceBook = { bySet:new Map(), bundle:null, ready:false };
 
   async function ensurePriceBook(){
     if (PriceBook.ready) return;
+    if (PriceBook.loading) return PriceBook.loading;
 
-    await loadFrMap();
+    PriceBook.loading = (async () => {
+      try {
+        try {
+          const bundle = await getPriceBundle();
+          if (bundle && bundle.cards){
+            PriceBook.bundle = bundle.cards;
+            PriceBook.bySet.clear();
+            PriceBook.generatedAt = bundle.generatedAt || null;
+            PriceBook.ready = true;
+            return;
+          }
+        } catch {
+          // ignore and fallback
+        }
 
-    const slugs = Array.from(new Set(CARDS.map(r => slugify(r['Série'] || '')).filter(Boolean)));
-    const setIds = new Set();
-    for (const sl of slugs){
-      // Detect subsets actually used in the CSV for this slug
-      const rowsForSlug = CARDS.filter(r => slugify(r['Série'] || '') === sl);
-      const hasGG = rowsForSlug.some(r => /^GG\d+/i.test(String(r['Numéro']||'').trim()));
-      const hasTG = rowsForSlug.some(r => /^TG\d+/i.test(String(r['Numéro']||'').trim()));
-      const hasSV = rowsForSlug.some(r => /^(SV\d+|SV\d+\/\d+)/i.test(String(r['Numéro']||'').trim()));
+        PriceBook.bundle = null;
+        await loadFrMap();
 
-      const mainId0 = getSetIdFromSlug(sl);
-      const ggId0   = getSetIdFromSlug(`${sl}-gg`);
-      const tgId0   = getSetIdFromSlug(`${sl}-tg`);
-      const svId0   = getSetIdFromSlug(`${sl}-sv`);
+        const slugs = Array.from(new Set(CARDS.map(r => slugify(r['Série'] || '')).filter(Boolean)));
+        const setIds = new Set();
+        for (const sl of slugs){
+          const rowsForSlug = CARDS.filter(r => slugify(r['Série'] || '') === sl);
+          const hasGG = rowsForSlug.some(r => /^GG\d+/i.test(String(r['Numéro']||'').trim()));
+          const hasTG = rowsForSlug.some(r => /^TG\d+/i.test(String(r['Numéro']||'').trim()));
+          const hasSV = rowsForSlug.some(r => /^(SV\d+|SV\d+\/\d+)/i.test(String(r['Numéro']||'').trim()));
 
-      const mainId = mainId0 || null;
-      const ggId   = ggId0 || (mainId && hasGG ? `${mainId}gg` : null);
-      const tgId   = tgId0 || (mainId && hasTG ? `${mainId}tg` : null);
-      const svId   = svId0 || (mainId && hasSV ? `${mainId}sv` : null);
-      [mainId, ggId, tgId, svId].forEach(id => { if (id) setIds.add(id); });
-    }
+          const mainId0 = getSetIdFromSlug(sl);
+          const ggId0   = getSetIdFromSlug(`${sl}-gg`);
+          const tgId0   = getSetIdFromSlug(`${sl}-tg`);
+          const svId0   = getSetIdFromSlug(`${sl}-sv`);
 
-    const results = await Promise.all(Array.from(setIds).map(async id => [id, await safeGet(id)]));
-    results.forEach(([id, data]) => { if (data) PriceBook.bySet.set(id, unwrap(data)); });
-    PriceBook.ready = true;
+          const mainId = mainId0 || null;
+          const ggId   = ggId0 || (mainId && hasGG ? `${mainId}gg` : null);
+          const tgId   = tgId0 || (mainId && hasTG ? `${mainId}tg` : null);
+          const svId   = svId0 || (mainId && hasSV ? `${mainId}sv` : null);
+          [mainId, ggId, tgId, svId].forEach(id => { if (id) setIds.add(id); });
+        }
+
+        const results = await Promise.all(Array.from(setIds).map(async id => [id, await safeGet(id)]));
+        results.forEach(([id, data]) => { if (data) PriceBook.bySet.set(id, unwrap(data)); });
+        PriceBook.ready = true;
+      } finally {
+        PriceBook.loading = null;
+      }
+    })();
+
+    return PriceBook.loading;
   }
 
   function lookupEntryForRow(row){
     const slug   = slugify(row['Série'] || '');
     const numRaw = String(row['Numéro'] || '').trim().toUpperCase();
     if (!slug || !numRaw) return null;
+
+    if (PriceBook.bundle){
+      const collection = PriceBook.bundle[slug];
+      if (collection){
+        const altKey = numRaw.replace(/^0+(?=\d)/, '');
+        const subsetKey = numRaw
+          .replace(/^GG0+/,'GG')
+          .replace(/^TG0+/,'TG')
+          .replace(/^SV0+/,'SV');
+        const entry = collection[numRaw]
+          || collection[altKey]
+          || collection[subsetKey]
+          || null;
+        if (entry) return entry;
+      }
+    }
 
     const mainId0 = getSetIdFromSlug(slug);
     const ggId0   = getSetIdFromSlug(`${slug}-gg`);
@@ -407,6 +445,7 @@ function initApp(){
 
   function priceForRow(row, entry){
     if (!entry) return 0;
+    if (entry.price != null) return Number(entry.price) || 0;
     const num = String(row['Numéro'] || '').toUpperCase();
     const isSub = /^(GG|TG|SV)/.test(num);
     if (isSub) return Number(entry.trend ?? entry.avg30 ?? entry.avg7 ?? entry.low ?? 0) || 0;
@@ -420,6 +459,27 @@ const pRev  = e => Number(e?.reverseTrend ?? 0) || pNorm(e);
 
   // Annote les prix d’une série visible (utile pour afficher le prix par carte)
   async function annotateRowsWithPrices(slug, arr){
+    if (PriceBook.bundle){
+      const dataset = PriceBook.bundle[slug];
+      if (!dataset) return;
+      let changed = false;
+      arr.forEach(r => {
+        const raw = String(r['Numéro']||'').trim().toUpperCase();
+        if (!raw) return;
+        const altKey = raw.replace(/^0+(?=\d)/, '');
+        const subsetKey = raw
+          .replace(/^GG0+/,'GG')
+          .replace(/^TG0+/,'TG')
+          .replace(/^SV0+/,'SV');
+        const entry = dataset[raw] || dataset[altKey] || dataset[subsetKey];
+        if (!entry) return;
+        const priceText = entry.priceText || (entry.price != null ? eur(Number(entry.price)) : null);
+        if (priceText && r['Prix'] !== priceText) { r['Prix'] = priceText; changed = true; }
+      });
+      if (changed) { scheduleRender(30); updateKPIs(); }
+      return;
+    }
+
     await loadFrMap();
     const mainId0 = getSetIdFromSlug(slug);
     const ggId0   = getSetIdFromSlug(`${slug}-gg`);
@@ -1008,6 +1068,10 @@ async function computeKPIsAsync(){
   /* ====================== RENDER ====================== */
   function render(){
     const layoutMode = currentLayoutMode || 'grid';
+    if (!PriceBook.ready){
+      const pending = ensurePriceBook();
+      if (pending && typeof pending.then === 'function') pending.then(()=>scheduleRender(0));
+    }
     const qtyFieldCandidates = ['Qty','Quantité','quantite','quantity','Owned','Nb','Qte','Count'];
     // CARTES
     const root=document.getElementById('cards-root');
@@ -1109,7 +1173,12 @@ if (mode === 'noprice') {
             const rawUrl = r['Image URL'] || r['Image'] || '';
             const safeUrl = sanitizeImageUrl(rawUrl);
             const qte = ownedQty(r);
-            const prix = r['Prix'] ? String(r['Prix']) : null;
+            let prix = r['Prix'] ? String(r['Prix']) : null;
+            if (!prix){
+              const entry = PriceBook.ready ? lookupEntryForRow(r) : null;
+              const val = entry ? priceForRow(r, entry) : 0;
+              if (entry && (entry.priceText || val > 0)) prix = entry.priceText || eur(val);
+            }
             const gradedVal = Number(r['Gradées'] ?? 0);
             const nbN = Number(r['Nb Normal']);
             const nbR = Number(r['Nb Reverse']);
@@ -1153,7 +1222,12 @@ arr.forEach(r=>{
   const safeUrl = sanitizeImageUrl(rawUrl);
   const img = safeUrl ? `<img loading='lazy' decoding='async' src='${escapeHtml(safeUrl)}' alt='${escapeHtml(r['Nom']||'')}'/>` : '';
   const qte = ownedQty(r);
-  const prix = r['Prix'] ? String(r['Prix']) : null;
+            let prix = r['Prix'] ? String(r['Prix']) : null;
+            if (!prix){
+              const entry = PriceBook.ready ? lookupEntryForRow(r) : null;
+              const val = entry ? priceForRow(r, entry) : 0;
+              if (entry && (entry.priceText || val > 0)) prix = entry.priceText || eur(val);
+            }
 
   // ★ Etoile si "Gradées" != 0
 const gradedVal = Number(r['Gradées'] ?? 0);

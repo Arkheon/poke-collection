@@ -124,7 +124,8 @@ async function main(){
     if (!slug) continue;
     const numRaw = idx.numero !== -1 ? parts[idx.numero] : '';
     if (!numRaw) continue;
-    const { entry, setId } = lookupEntry({ slug, numRaw, frMap, priceCache });
+    const numKey = String(numRaw).trim().toUpperCase();
+    const { entry, setId } = lookupEntry({ slug, numRaw: numKey, frMap, priceCache });
     if (!entry) continue;
 
     const rowInfo = {
@@ -132,7 +133,7 @@ async function main(){
     };
     const priceValue = choosePrice(entry, rowInfo);
     bundle[slug] ||= {};
-    bundle[slug][numRaw] = {
+    bundle[slug][numKey] = {
       setId,
       trend: entry.trend ?? null,
       avg7: entry.avg7 ?? null,

@@ -14,6 +14,9 @@ const IN_FLIGHT = new Map();
 let KNOWN_SETS = null;               // list<string> or null if unavailable
 let KNOWN_SETS_PROMISE = null;       // Promise dedup to avoid repeated 404s
 
+let PRICE_BUNDLE = null;
+let PRICE_BUNDLE_PROMISE = null;
+
 function readSetCache(setId) {
   try {
     const raw = localStorage.getItem('ptcg_prices_' + setId);
@@ -132,4 +135,35 @@ export async function getSetPrices(setId) {
 export function peekPriceCache(setId) {
   const v = PRICE_CACHE.get(setId);
   return v && v !== 'loading' ? v : null;
+}
+
+export async function getPriceBundle(){
+  if (PRICE_BUNDLE) return PRICE_BUNDLE;
+  if (PRICE_BUNDLE_PROMISE) return PRICE_BUNDLE_PROMISE;
+
+  const candidates = [
+    `${BASE_PATH}public/prices/cards-bundle.json`,
+    `${BASE_PATH}prices/cards-bundle.json`,
+    `public/prices/cards-bundle.json`,
+    `prices/cards-bundle.json`,
+  ];
+
+  PRICE_BUNDLE_PROMISE = (async () => {
+    for (const url of candidates){
+      try {
+        const r = await fetch(url, { cache: 'no-store' });
+        if (r.ok){
+          const json = await r.json();
+          if (json && json.cards){
+            PRICE_BUNDLE = json;
+            return PRICE_BUNDLE;
+          }
+        }
+      } catch (_) {}
+    }
+    PRICE_BUNDLE = null;
+    return null;
+  })();
+
+  return PRICE_BUNDLE_PROMISE;
 }
