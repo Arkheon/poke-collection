@@ -30,6 +30,9 @@ jobs:
       - name: Build price JSON
         run: node scripts/build-prices.js
 
+      - name: Build aggregated price bundle
+        run: node scripts/build-price-bundle.js
+
       - name: Commit updated files
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
