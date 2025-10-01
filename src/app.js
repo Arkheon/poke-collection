@@ -147,12 +147,6 @@ function initApp(){
 
   /* ====================== DONNÉES ====================== */
   let CARDS=[], SEALED=[], GRADED=[];
-  const SERIES_ROWS_CACHE = new Map();
-  const SERIES_ANNOTATION_STATE = new Map();
-  function resetSeriesCaches(){
-    SERIES_ROWS_CACHE.clear();
-    SERIES_ANNOTATION_STATE.clear();
-  }
   const AUTO_SOURCES={ cards:'cartes.csv', sealed:'scelle.csv', graded:'gradees.csv' };
   const LAST_UPDATED={ cards:null, sealed:null, graded:null };
   const LAST_UPDATED_SOURCE={ cards:null, sealed:null, graded:null };
@@ -230,7 +224,7 @@ function initApp(){
     rows.map(r=>Object.fromEntries(Object.entries(r).map(([k,v])=>[String(k).trim(), typeof v==='string'? v.trim(): v])));
 
   // Chargements auto (+ mise à jour KPI)
-  loadCsvFromUrl('cards', AUTO_SOURCES.cards, rows=>{ CARDS=normalizeRows(rows); resetSeriesCaches(); refreshSeries();PriceBook.bySet.clear();PriceBook.ready = false; render(); updateKPIs(); });
+  loadCsvFromUrl('cards', AUTO_SOURCES.cards, rows=>{ CARDS=normalizeRows(rows); refreshSeries();PriceBook.bySet.clear();PriceBook.ready = false; render(); updateKPIs(); });
   loadCsvFromUrl('sealed', AUTO_SOURCES.sealed, rows=>{ SEALED=normalizeRows(rows); refreshSeries();  refreshSealedFilters(); render(); updateKPIs(); });
   loadCsvFromUrl('graded', AUTO_SOURCES.graded, rows=>{ GRADED=normalizeRows(rows); refreshCompanies();  render(); updateKPIs(); });
 
@@ -239,7 +233,7 @@ function initApp(){
     document.getElementById('csv-cards')?.addEventListener('change', e=>{
       const f=e.target.files?.[0]; if(!f) return;
       Papa.parse(f,{header:true,skipEmptyLines:true,complete:res=>{
-        CARDS=normalizeRows(res.data); resetSeriesCaches(); PriceBook.bySet.clear(); PriceBook.ready = false; refreshSeries(); render(); updateKPIs();
+        CARDS=normalizeRows(res.data); refreshSeries(); render(); updateKPIs();
         registerLastUpdated('cards', f.lastModified ? new Date(f.lastModified) : new Date(), 'upload');
       }});
     });
@@ -265,7 +259,6 @@ function initApp(){
       ];
       SEALED=[{'Série':'151','Type':'ETB','Détail':'Exemple','Commentaires':'—','Image':'https://via.placeholder.com/400x250?text=ETB+151','Prix':'89,00'}];
       GRADED=[{'Nom':'Pikachu','Edition':'SWSH','Société':'PSA','Note':'10','Détail':'Test','Image':'https://via.placeholder.com/400x250?text=PSA+10','Prix':'120'}];
-      resetSeriesCaches(); PriceBook.bySet.clear(); PriceBook.ready = false;
       refreshSeries(); refreshSealedFilters(); refreshCompanies(); render(); updateKPIs();
       const now = new Date();
       registerLastUpdated('cards', now, 'demo');
@@ -483,31 +476,6 @@ const pRev  = e => Number(e?.reverseTrend ?? 0) || pNorm(e);
       }
     }
     if (changed) { scheduleRender(30); updateKPIs(); }
-  }
-
-  function rowsForSeries(slug){
-    if (!slug) return [];
-    if (!SERIES_ROWS_CACHE.has(slug)){
-      const all = (Array.isArray(CARDS) ? CARDS : []).filter(r => slugify(r['Série']) === slug);
-      SERIES_ROWS_CACHE.set(slug, all);
-    }
-    return SERIES_ROWS_CACHE.get(slug) || [];
-  }
-
-  function ensureSeriesPrices(slug){
-    if (!slug) return;
-    const state = SERIES_ANNOTATION_STATE.get(slug);
-    if (state === 'done') return;
-    if (state && typeof state.then === 'function') return;
-    const fullRows = rowsForSeries(slug);
-    if (!fullRows.length) return;
-    const prom = annotateRowsWithPrices(slug, fullRows)
-      .then(()=>{ SERIES_ANNOTATION_STATE.set(slug, 'done'); })
-      .catch(err=>{
-        console.warn('Annotation prix série échouée', slug, err);
-        SERIES_ANNOTATION_STATE.delete(slug);
-      });
-    SERIES_ANNOTATION_STATE.set(slug, prom);
   }
 
   const posInt = (v)=>{ const n = Number(String(v??'').replace(',','.')); return Number.isFinite(n) ? Math.max(0,n) : 0; };
@@ -1126,7 +1094,13 @@ if (mode === 'noprice') {
       groups.forEach(([slug,arr])=>{
         const title = SERIE_CANON.get(slug) || 'Sans série';
         arr.sort(sortCardNumbers);
-        ensureSeriesPrices(slug);
+
+        // Ajoute le prix seulement quand une série précise est sélectionnée (affichage grille)
+        const serieSel = document.getElementById('serie');
+        const selectedSlug = serieSel ? serieSel.value : 'all';
+        if (selectedSlug !== 'all' && selectedSlug === slug) {
+          annotateRowsWithPrices(slug, arr);
+        }
         html+=`<div class='section'><h3 style='margin:0 4px 10px 4px;font-size:16px;'><span class='s-title-text'>${escapeHtml(title)} <span class='hint'>(${arr.length} cartes)</span></span></h3>`;
 
         if (layoutMode === 'list') {
