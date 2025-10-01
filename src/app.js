@@ -279,30 +279,37 @@ function initApp(){
   era && (era.onchange=()=>{ refreshSeries(); scheduleRender(0); });
   serie && (serie.onchange=()=>{ const sl = serie.value; if (sl && sl !== 'all'){ const e = eraFromSlug(sl); const eraEl = document.getElementById('era'); if (e && e.key && eraEl) eraEl.value = e.key; } refreshSeries(); scheduleRender(0); });
   view && (view.onchange=()=>scheduleRender(0));
-  const layoutControls=[layoutSel,layoutSealedSel,layoutGradedSel].filter(Boolean);
-  const syncLayoutValue=(value,origin)=>{
-    layoutControls.forEach(sel=>{
-      if(!sel) return;
-      if(origin && sel===origin) return;
-      if(sel.value!==value) sel.value=value;
-    });
-  };
-  const getLayoutMode=()=>{
-    for (const sel of layoutControls){
-      if (sel) return sel.value;
-    }
-    return 'grid';
-  };
+  const layoutControls=[
+    { id:'layout', node:layoutSel },
+    { id:'layout-sealed', node:layoutSealedSel },
+    { id:'layout-graded', node:layoutGradedSel },
+  ].filter(entry => entry.node);
 
-  layoutControls.forEach(sel=>{
-    sel && (sel.onchange=()=>{ syncLayoutValue(sel.value, sel); scheduleRender(0); });
+  layoutControls.forEach(({ id }) => enhanceSimpleSelect(id));
+
+  let currentLayoutMode = layoutControls.find(entry => entry.node.value)?.node.value || 'list';
+
+  function applyLayoutMode(mode, originNode){
+    currentLayoutMode = mode || 'grid';
+    layoutControls.forEach(({ node }) => {
+      if (!node) return;
+      if (node !== originNode && node.value !== currentLayoutMode) {
+        node.value = currentLayoutMode;
+      }
+      if (typeof node._simpleSelectUpdate === 'function') {
+        node._simpleSelectUpdate();
+      }
+    });
+    scheduleRender(0);
+  }
+
+  layoutControls.forEach(({ node }) => {
+    node.addEventListener('change', () => applyLayoutMode(node.value, node));
   });
-  if(layoutControls.length){ syncLayoutValue(layoutControls[0].value); }
+
+  applyLayoutMode(currentLayoutMode);
   // enhance simple selects that are static
   enhanceSimpleSelect('view');
-  enhanceSimpleSelect('layout');
-  enhanceSimpleSelect('layout-sealed');
-  enhanceSimpleSelect('layout-graded');
 
   const qs=document.getElementById('qs');
   const eraS=document.getElementById('eraS');
@@ -1000,7 +1007,7 @@ async function computeKPIsAsync(){
 
   /* ====================== RENDER ====================== */
   function render(){
-    const layoutMode = getLayoutMode();
+    const layoutMode = currentLayoutMode || 'grid';
     const qtyFieldCandidates = ['Qty','Quantité','quantite','quantity','Owned','Nb','Qte','Count'];
     // CARTES
     const root=document.getElementById('cards-root');

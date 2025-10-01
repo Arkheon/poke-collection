@@ -57,5 +57,5 @@ export function enhanceSimpleSelect(selectId){
 
   select.style.display = 'none';
   select.insertAdjacentElement('afterend', wrap);
+  select._simpleSelectUpdate = renderButton;
 }
-
