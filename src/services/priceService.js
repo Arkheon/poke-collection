@@ -87,7 +87,8 @@ export async function getSetPrices(setId) {
 
   // If we know the list of built sets, skip fetch for unknown IDs to avoid 404 noise
   const known = await ensureKnownSets();
-  if (known && !known.includes(setId)) {
+  const maybeSubset = /(tg|gg|sv)$/i.test(setId);
+  if (known && !known.includes(setId) && !maybeSubset) {
     PRICE_CACHE.set(setId, {});
     return {};
   }
